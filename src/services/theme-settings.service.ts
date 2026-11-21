@@ -1,11 +1,13 @@
+import type { PingTaskLabelMode } from '@/utils/threeNetSettings'
 import { requirePermission } from '@/services/auth.service'
 import { requestManager } from '@/services/request.service'
 import { getSharedApi } from '@/utils/api'
-import { parseNodePingBindings, parsePingTaskIds } from '@/utils/threeNetSettings'
+import { isPingTaskLabelMode, parseNodePingBindings, parsePingTaskIds } from '@/utils/threeNetSettings'
 
 export interface ThreeNetDisplaySettings {
   threeNetPingEnabled?: boolean
   threeNetPingSparkline?: boolean
+  threeNetPingLabelMode?: PingTaskLabelMode
 }
 
 // Adapted from towersip. Patch only edited nodes into freshly fetched settings,
@@ -35,6 +37,8 @@ export async function saveThreeNetPingBindings(changes: Record<string, number[]>
       settings.threeNetPingEnabled = display.threeNetPingEnabled
     if (typeof display.threeNetPingSparkline === 'boolean')
       settings.threeNetPingSparkline = display.threeNetPingSparkline
+    if (isPingTaskLabelMode(display.threeNetPingLabelMode))
+      settings.threeNetPingLabelMode = display.threeNetPingLabelMode
     if (!current.theme)
       throw new Error('无法确定当前主题，配置未保存。')
     await api.saveThemeSettings(current.theme, settings, signal)

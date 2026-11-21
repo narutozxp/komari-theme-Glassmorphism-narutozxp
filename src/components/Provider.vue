@@ -26,6 +26,7 @@ watch(
   ([preset, customColors]) => {
     const tokens = buildGlassThemeTokens(preset, customColors)
     const root = document.documentElement
+    root.classList.toggle('starlight-palette', preset === 'starlight')
     root.style.setProperty('--glass-light-card', tokens.lightCard)
     root.style.setProperty('--glass-light-card-hover', tokens.lightCardHover)
     root.style.setProperty('--glass-light-control', tokens.lightControl)

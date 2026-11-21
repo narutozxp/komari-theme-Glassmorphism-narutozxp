@@ -41,6 +41,7 @@ test('home light desktop', async ({ page }) => {
   await openStablePage(page)
   await expectNodeMetricIcons(page)
   await expectNodePingBars(page)
+  await expect(page.locator('.default-background')).toHaveCSS('background-image', /monitor-background-light\.png/)
   await expect(page).toHaveScreenshot('home-light-desktop.png', { fullPage: false })
 })
 
@@ -49,6 +50,7 @@ test('home dark mobile', async ({ page }) => {
   await installKomariFixture(page, { dark: true })
   await openStablePage(page)
   await expectNodeMetricIcons(page)
+  await expect(page.locator('.default-background')).toHaveCSS('background-image', /default-background-v2\.webp/)
   await expect(page).toHaveScreenshot('home-dark-mobile.png', { fullPage: false })
 })
 
@@ -145,6 +147,33 @@ test('free node pricing stays semantic across home, finance, and detail', async 
   await expect(page.getByText('剩余价值', { exact: true })).toBeVisible()
   await expect(page.getByText('无', { exact: true })).toBeVisible()
   await expect(page.getByText('免费 / 月', { exact: true })).toHaveCount(0)
+})
+
+test('paid node prices show currency symbols in cards, lists, finance, and detail', async ({ page }) => {
+  const nodeName = '主控-洛杉矶'
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await installKomariFixture(page, { hideEarth: true })
+  await openStablePage(page)
+
+  const nodeCard = page.getByRole('button', { name: `查看节点 ${nodeName} 详情` })
+  await expect(nodeCard.getByText('$9.9 / 年', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: '列表视图', exact: true }).click()
+  await expect(page.getByText('$9.9 / 年', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: '查看剩余价值明细' }).click()
+  const financeDialog = page.getByRole('dialog', { name: '价值与费用明细' })
+  const nodeRow = financeDialog.getByRole('row').filter({ has: page.getByRole('cell', { name: nodeName, exact: true }) })
+  await expect(nodeRow.getByText('$9.9 / 年', { exact: true })).toBeVisible()
+  const currencySelect = financeDialog.getByRole('combobox', { name: '显示币种', exact: true })
+  await currencySelect.press('ArrowDown')
+  await page.getByRole('option', { name: '$ 美元', exact: true }).click()
+  await expect(currencySelect).toHaveText('$ 美元')
+
+  await page.goto('/instance/00000000-0000-4000-8000-000000000001')
+  await expect(page.getByText('$9.9', { exact: true })).toBeVisible()
+  await expect(page.getByText('$0.81', { exact: true })).toBeVisible()
+  await expect(page.getByText(/USD/)).toHaveCount(0)
 })
 
 test('detail light desktop', async ({ page }) => {

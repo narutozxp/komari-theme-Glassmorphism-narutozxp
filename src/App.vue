@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
@@ -14,6 +15,8 @@ import LoadingCover from './components/LoadingCover.vue'
 import Provider from './components/Provider.vue'
 
 const appStore = useAppStore()
+const route = useRoute()
+const contentWidth = computed(() => route.name === 'home' ? 'max-w-[1536px]' : 'max-w-[1280px]')
 useVisitorPageAudit()
 
 const isReady = ref(false)
@@ -68,7 +71,7 @@ onUnmounted(() => {
     >
       <LoadingCover v-if="appStore.loading" />
     </Transition>
-    <Header />
+    <Header :content-width="contentWidth" />
     <Transition
       :css="!appStore.disablePageAnimation"
       enter-active-class="transition-all duration-300 ease-out"
@@ -77,7 +80,7 @@ onUnmounted(() => {
     >
       <div v-if="!appStore.loading" class="app-shell">
         <main class="min-h-screen overflow-hidden">
-          <div v-if="appStore.connectionError" class="relative z-10 mx-auto max-w-[1280px] px-4 pt-4">
+          <div v-if="appStore.connectionError" class="relative z-10 mx-auto px-4 pt-4" :class="contentWidth">
             <Alert variant="destructive" class="!pr-28 border-none bg-destructive/10 backdrop-blur-xs rounded-md">
               <Icon icon="tabler:plug-connected-x" />
               <AlertTitle>RPC 服务错误</AlertTitle>
@@ -90,7 +93,7 @@ onUnmounted(() => {
               </AlertAction>
             </Alert>
           </div>
-          <div class="max-w-[1280px] mx-auto">
+          <div class="mx-auto" :class="contentWidth">
             <RouterView v-slot="{ Component }">
               <Transition
                 :css="!appStore.disablePageAnimation"
@@ -107,7 +110,7 @@ onUnmounted(() => {
             </RouterView>
           </div>
         </main>
-        <Footer />
+        <Footer :content-width="contentWidth" />
       </div>
     </Transition>
     <Toaster rich-colors close-button position="top-center" />

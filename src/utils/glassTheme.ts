@@ -1,6 +1,6 @@
 import type { GlassCustomColors } from '@/stores/app'
 
-export type GlassColorPreset = 'emerald' | 'soft' | 'contrast' | 'midnight' | 'custom'
+export type GlassColorPreset = 'starlight' | 'emerald' | 'soft' | 'contrast' | 'midnight' | 'custom'
 
 interface GlassThemeTokens {
   lightCard: string
@@ -22,6 +22,24 @@ interface GlassThemeTokens {
 }
 
 const PRESET_TOKENS: Record<Exclude<GlassColorPreset, 'custom'>, GlassThemeTokens> = {
+  starlight: {
+    lightCard: '#faf7ffe8',
+    lightCardHover: '#fffffffa',
+    lightControl: '#f4eeffe8',
+    lightHeader: '#f7f1ffe8',
+    lightText: '#24113f',
+    lightMutedText: '#594868',
+    lightBorder: '#6d35c733',
+    lightShadow: '0 7px 24px rgb(80 43 137 / 0.10)',
+    darkCard: '#101027e8',
+    darkCardHover: '#191634f5',
+    darkControl: '#15142de8',
+    darkHeader: '#0c0c23e8',
+    darkText: '#fbf8ff',
+    darkMutedText: '#c8bddc',
+    darkBorder: '#9b5cff42',
+    darkShadow: '0 10px 30px rgb(0 0 0 / 0.28)',
+  },
   emerald: {
     lightCard: '#f1f5f9bd',
     lightCardHover: '#f8fafccc',

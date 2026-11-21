@@ -26,8 +26,8 @@ const rows = computed(() => {
     ? items.value
     : [{
         id: 'summary',
-        name: '延迟',
-        label: '延迟',
+        name: '全部任务平均',
+        label: '任务平均',
         stats: {
           history: props.stats.history.value,
         },
@@ -78,7 +78,7 @@ function inspectKeyboard(event: KeyboardEvent, id: number | string, count: numbe
       <!-- Shared columns and 20px rows ported from towersip's NodeCard. -->
       <div v-for="item in rows" :key="item.id" :data-three-net-task="item.id === 'summary' ? undefined : item.id" class="ping-sparkline-row min-h-5 min-w-0 items-center rounded-md px-0.5 leading-none hover:bg-slate-500/5" :class="app.nodeCardSize === 'mini' ? 'text-[10px]' : 'text-[11px]'">
         <span class="size-1.5 rounded-full" :class="item.dotClass" />
-        <button type="button" class="min-w-0 truncate text-left text-muted-foreground" :title="`${item.name}，打开完整图表`" :aria-label="`${item.name} ${item.latency}`" @click="clear(); emit('open')">
+        <button type="button" class="min-w-0 text-left leading-tight text-muted-foreground [overflow-wrap:anywhere]" :title="`${item.name}，打开完整图表`" :aria-label="`${item.name} ${item.latency}`" @click="clear(); emit('open')">
           {{ item.label }}
         </button>
         <button type="button" class="text-right font-medium tabular-nums" :class="item.latencyToneClass" title="最近一小时窗口平均延迟" @click="clear(); emit('open')">
@@ -112,9 +112,12 @@ function inspectKeyboard(event: KeyboardEvent, id: number | string, count: numbe
     </template>
     <template v-else>
       <div v-for="item in rows" :key="item.id" :data-three-net-task="item.id === 'summary' ? undefined : item.id" class="grid grid-cols-2 gap-1.5">
-        <button v-for="metric in (['latency', 'loss'] as const)" :key="metric" type="button" class="group/panel flex min-w-0 flex-col rounded-lg bg-slate-500/5" :title="metric === 'latency' ? '最近一小时窗口平均延迟' : '最近一小时窗口丢包率'" :class="[app.nodeCardSize === 'mini' ? 'p-1 gap-1 h-7' : 'p-2 gap-1.5', app.nodeCardSize === 'large' ? 'h-14' : app.nodeCardSize === 'comfortable' ? 'h-12' : app.nodeCardSize === 'mini' ? 'h-7' : 'h-11']" @click="emit('open')">
-          <span class="flex w-full justify-between text-[11px] leading-none"><span class="min-w-0 truncate text-muted-foreground">{{ metric === 'latency' ? item.label : '丢包' }}</span><span class="font-medium tabular-nums">{{ item[metric] }}</span></span>
-          <span :data-node-ping-bars="item.id === 'summary' ? metric : `task-${item.id}-${metric}`" class="grid min-h-0 w-full flex-1 gap-px" :style="{ gridTemplateColumns: `repeat(${item.stats.history.length || 20}, minmax(0, 1fr))` }">
+        <button v-for="metric in (['latency', 'loss'] as const)" :key="metric" type="button" class="group/panel flex min-w-0 flex-col rounded-lg bg-slate-500/5" :title="`${item.name} · ${metric === 'latency' ? '最近一小时窗口平均延迟' : '最近一小时窗口丢包率'}`" :class="[app.nodeCardSize === 'mini' ? 'p-1 gap-1 min-h-7' : 'p-2 gap-1.5', app.nodeCardSize === 'large' ? 'min-h-14' : app.nodeCardSize === 'comfortable' ? 'min-h-12' : app.nodeCardSize === 'mini' ? 'min-h-7' : 'min-h-11']" @click="emit('open')">
+          <span class="flex w-full justify-between gap-1 text-[11px] leading-tight">
+            <span class="min-w-0 text-left text-muted-foreground [overflow-wrap:anywhere]">{{ metric === 'latency' ? item.label : '丢包' }}</span>
+            <span class="shrink-0 font-medium tabular-nums">{{ item[metric] }}</span>
+          </span>
+          <span :data-node-ping-bars="item.id === 'summary' ? metric : `task-${item.id}-${metric}`" class="grid min-h-1 w-full flex-1 gap-px" :style="{ gridTemplateColumns: `repeat(${item.stats.history.length || 20}, minmax(0, 1fr))` }">
             <DataTooltip v-for="(point, index) in item.stats.history.length ? item.stats.history : Array.from({ length: 20 }, () => ({ time: '', latency: null, loss: null }))" :key="index" :content="`${point.time ? formatDateTime(point.time, 'HH:mm:ss') : ''}\n${point[metric] === null ? '无采样数据' : metric === 'latency' ? `${Math.round(point.latency!)} ms` : `${point.loss!.toFixed(1)}%`}`" placement="top" class="h-full w-full">
               <span class="block h-full w-full rounded-[1px]" :class="point[metric] === null ? 'bg-muted-foreground/15' : metric === 'latency' ? getLatencyToneClass(point.latency!) : getLossToneClass(point.loss!)" />
             </DataTooltip>

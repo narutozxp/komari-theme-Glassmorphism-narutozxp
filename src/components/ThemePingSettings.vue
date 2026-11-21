@@ -10,7 +10,12 @@ import { useThreeNetPingSettings } from '@/composables/useThreeNetPingSettings'
 
 defineProps<{ open: boolean }>()
 const emit = defineEmits<{ 'update:open': [open: boolean] }>()
-const { loading, saving, error, nodeSearch, taskSearch, activeNodeId, bindings, dirty, pingEnabled, sparklineEnabled, visibleNodes, filteredNodes, activeNodeName, activeTaskIds, unavailableTaskIds, filteredTasks, configuredNodeCount, nodeTaskSummary, toggleTask, save } = useThreeNetPingSettings()
+const { loading, saving, error, nodeSearch, taskSearch, activeNodeId, bindings, dirty, pingDisplayMode, sparklineEnabled, visibleNodes, filteredNodes, activeNodeName, activeTaskIds, unavailableTaskIds, filteredTasks, configuredNodeCount, nodeTaskSummary, toggleTask, save } = useThreeNetPingSettings()
+const pingDisplayOptions = [
+  { value: 'summary', label: '全部任务平均' },
+  { value: 'carrier', label: '运营商名称' },
+  { value: 'full', label: '完整任务名称' },
+]
 </script>
 
 <template>
@@ -29,9 +34,22 @@ const { loading, saving, error, nodeSearch, taskSearch, activeNodeId, bindings, 
       {{ error }}
     </div>
     <CardX class="mt-5" size="small">
-      <div class="mb-4 flex flex-wrap gap-4 text-sm">
-        <label class="flex items-center gap-2"><input v-model="pingEnabled" type="checkbox" :disabled="saving" class="size-4 accent-primary">显示三网延迟</label>
-        <label class="flex items-center gap-2"><input v-model="sparklineEnabled" type="checkbox" :disabled="saving" class="size-4 accent-primary">三网新版样式</label>
+      <div class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        <label class="flex flex-wrap items-center gap-2">
+          <span>探测显示方式</span>
+          <span class="relative">
+            <select
+              v-model="pingDisplayMode"
+              :disabled="saving"
+              aria-label="探测显示方式"
+              class="h-9 appearance-none rounded-md border border-input bg-popover ps-3 pe-8 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              <option v-for="option in pingDisplayOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+            <Icon icon="tabler:chevron-down" width="14" height="14" aria-hidden="true" class="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          </span>
+        </label>
+        <label class="flex items-center gap-2"><input v-model="sparklineEnabled" type="checkbox" :disabled="saving" class="size-4 accent-primary">曲线样式</label>
       </div>
       <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
         <span><Icon icon="tabler:server" class="mr-1 text-primary" />已配置 {{ configuredNodeCount }} 台服务器</span><Badge variant="outline">

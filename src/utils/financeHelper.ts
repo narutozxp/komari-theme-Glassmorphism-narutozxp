@@ -1,7 +1,9 @@
 import type { NodeData } from '@/stores/nodes'
+import type { CurrencyCode } from '@/utils/currency'
+import { getCurrencyDisplaySymbol, SUPPORTED_CURRENCIES } from '@/utils/currency'
 import { isFreeNode } from '@/utils/tagHelper'
 
-export type CurrencyCode = 'CNY' | 'USD' | 'HKD' | 'EUR' | 'GBP' | 'JPY' | 'RUB' | 'CHF' | 'INR' | 'VND' | 'THB' | 'CAD'
+export type { CurrencyCode } from '@/utils/currency'
 export type ExchangeRates = Record<CurrencyCode, number>
 export type ExchangeRateSource = 'cache' | 'network' | 'stale-cache' | 'default'
 
@@ -39,7 +41,6 @@ const FINANCE_CURRENCY_KEY = 'fin_currency'
 const EXCLUDE_FREE_KEY = 'fin_exclude_free'
 const METERED_SETTINGS_KEY_PREFIX = 'theme:usage-estimator:v1:'
 export const MAX_ESTIMATE_INPUT = 1e12
-export const SUPPORTED_CURRENCIES: CurrencyCode[] = ['CNY', 'USD', 'HKD', 'EUR', 'GBP', 'JPY', 'RUB', 'CHF', 'INR', 'VND', 'THB', 'CAD']
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const LONG_TERM_YEARS = 100
 let exchangeRatesInflight: Promise<{ rates: ExchangeRates, source: ExchangeRateSource, updatedAt: number | null }> | null = null
@@ -57,21 +58,6 @@ export const DEFAULT_EXCHANGE_RATES: ExchangeRates = {
   VND: 3500,
   THB: 5.0,
   CAD: 0.19,
-}
-
-export const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = {
-  CNY: '¥',
-  USD: '$',
-  HKD: 'HK$',
-  EUR: '€',
-  GBP: '£',
-  JPY: '¥',
-  RUB: '₽',
-  CHF: '₣',
-  INR: '₹',
-  VND: '₫',
-  THB: '฿',
-  CAD: 'CA$',
 }
 
 const EXCHANGE_RATE_APIS = [
@@ -366,7 +352,7 @@ export function formatFinanceAmount(amount: number, currency: CurrencyCode): {
 
   return {
     currency,
-    symbol: CURRENCY_SYMBOLS[currency],
+    symbol: getCurrencyDisplaySymbol(currency),
     value,
   }
 }

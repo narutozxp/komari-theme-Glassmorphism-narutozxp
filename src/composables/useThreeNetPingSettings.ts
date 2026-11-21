@@ -5,6 +5,7 @@ import { loadPublicPingTasks } from '@/services/metrics.service'
 import { saveThreeNetPingBindings } from '@/services/theme-settings.service'
 import { useAppStore } from '@/stores/app'
 import { useNodesStore } from '@/stores/nodes'
+import { isPingTaskLabelMode } from '@/utils/threeNetSettings'
 
 export function useThreeNetPingSettings() {
   const app = useAppStore()
@@ -22,10 +23,24 @@ export function useThreeNetPingSettings() {
   const globalChanged = ref(false)
   const pingEnabled = ref(app.threeNetPingEnabled)
   const sparklineEnabled = ref(app.threeNetPingSparkline)
-  const originalDisplay = ref({ threeNetPingEnabled: app.threeNetPingEnabled, threeNetPingSparkline: app.threeNetPingSparkline })
+  const labelMode = ref(app.threeNetPingLabelMode)
+  const pingDisplayMode = computed({
+    get: () => pingEnabled.value ? labelMode.value : 'summary',
+    set(value: string) {
+      pingEnabled.value = isPingTaskLabelMode(value)
+      if (isPingTaskLabelMode(value))
+        labelMode.value = value
+    },
+  })
+  const originalDisplay = ref({
+    threeNetPingEnabled: pingEnabled.value,
+    threeNetPingSparkline: sparklineEnabled.value,
+    threeNetPingLabelMode: labelMode.value,
+  })
   const displayChanges = computed<ThreeNetDisplaySettings>(() => ({
     ...(pingEnabled.value !== originalDisplay.value.threeNetPingEnabled ? { threeNetPingEnabled: pingEnabled.value } : {}),
     ...(sparklineEnabled.value !== originalDisplay.value.threeNetPingSparkline ? { threeNetPingSparkline: sparklineEnabled.value } : {}),
+    ...(labelMode.value !== originalDisplay.value.threeNetPingLabelMode ? { threeNetPingLabelMode: labelMode.value } : {}),
   }))
   const dirty = computed(() => globalChanged.value || Object.keys(changes.value).length > 0 || Object.keys(displayChanges.value).length > 0)
   const visibleNodes = computed(() => nodes.visibleNodes)
@@ -79,7 +94,12 @@ export function useThreeNetPingSettings() {
       globalChanged.value = false
       pingEnabled.value = app.threeNetPingEnabled
       sparklineEnabled.value = app.threeNetPingSparkline
-      originalDisplay.value = { threeNetPingEnabled: pingEnabled.value, threeNetPingSparkline: sparklineEnabled.value }
+      labelMode.value = app.threeNetPingLabelMode
+      originalDisplay.value = {
+        threeNetPingEnabled: pingEnabled.value,
+        threeNetPingSparkline: sparklineEnabled.value,
+        threeNetPingLabelMode: labelMode.value,
+      }
       window.$message?.success('按服务器 Ping 任务配置已保存。')
     }
     catch (cause) {
@@ -94,5 +114,5 @@ export function useThreeNetPingSettings() {
     catch (cause) { error.value = cause instanceof Error ? cause.message : 'Ping 任务加载失败。' }
     finally { loading.value = false }
   })
-  return { tasks, loading, saving, error, nodeSearch, taskSearch, activeNodeId, bindings, dirty, pingEnabled, sparklineEnabled, visibleNodes, filteredNodes, activeNode, activeNodeName, activeTaskIds, unavailableTaskIds, filteredTasks, configuredNodeCount, taskName, nodeTaskSummary, toggleTask, save }
+  return { tasks, loading, saving, error, nodeSearch, taskSearch, activeNodeId, bindings, dirty, pingDisplayMode, sparklineEnabled, visibleNodes, filteredNodes, activeNode, activeNodeName, activeTaskIds, unavailableTaskIds, filteredTasks, configuredNodeCount, taskName, nodeTaskSummary, toggleTask, save }
 }

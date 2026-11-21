@@ -204,7 +204,6 @@ interface MetricCard {
 
 const MONTH_DAYS = 30
 const EXPIRES_IN_SUFFIX_REGEX = /^(\d+)\s*(天|days?)$/i
-const CURRENCY_SUFFIX_REGEX = /^(\S.*\S)\s+([A-Z]{3})$/
 
 function formatNodeAmount(amount: number, currency: string): string {
   if (!Number.isFinite(amount) || amount <= 0)
@@ -231,9 +230,6 @@ function splitMetricValue(value: string): { value: string, unit?: string } {
   const expiresInMatch = value.match(EXPIRES_IN_SUFFIX_REGEX)
   if (expiresInMatch)
     return { value: expiresInMatch[1] ?? value, unit: expiresInMatch[2] ?? undefined }
-  const currencyMatch = value.match(CURRENCY_SUFFIX_REGEX)
-  if (currencyMatch)
-    return { value: currencyMatch[1] ?? value, unit: currencyMatch[2] ?? undefined }
   return { value }
 }
 

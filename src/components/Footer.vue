@@ -2,9 +2,13 @@
 import type { VersionInfo } from '@/utils/api'
 import { computed, onMounted, ref } from 'vue'
 import { DataTooltip } from '@/components/ui/data-tooltip'
+import VisitorInfo from '@/components/VisitorInfo.vue'
+import { useAppStore } from '@/stores/app'
 import { getSharedApi } from '@/utils/api'
 
+defineProps<{ contentWidth: string }>()
 const api = getSharedApi()
+const appStore = useAppStore()
 
 const buildVersion = __BUILD_VERSION__
 const buildGitHash = __BUILD_GIT_HASH__
@@ -24,7 +28,8 @@ const formattedServerVersion = computed(() => serverVersion.value?.version ?? ''
 </script>
 
 <template>
-  <footer class="w-full max-w-[1280px] mx-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+  <footer class="w-full mx-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]" :class="contentWidth">
+    <VisitorInfo v-if="appStore.visitorInfoEnabled" />
     <div class="flex w-full flex-col sm:flex-row justify-between gap-2 sm:gap-4 text-xs text-muted-foreground">
       <div class="flex gap-1 items-center">
         Powered by

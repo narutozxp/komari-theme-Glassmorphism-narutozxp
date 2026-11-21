@@ -1,20 +1,23 @@
 <div align="center">
 
-# 🌌 Komari Glassmorphism
+# 🌌 Komari Glassmorphism 定制版
 
 ## 给 Komari Monitor 的一套「玻璃拟态 · 运维驾驶舱」主题
 
-从好看的监控首页，逐步成长为好用、可配置、适合长期运行的 Komari 主题。
+首页默认使用蓝紫配色、亮暗背景和节点地图。地图按地区汇总在线节点，支持悬停、键盘聚焦和触屏查看。地图下方可按分组、收藏、离线、过载及到期状态筛选，也可按流量和实时速率排序。
 
-![Version](https://img.shields.io/github/v/release/sanrokamlan-prog/komari-theme-Glassmorphism?style=for-the-badge&label=release&color=10b981)
+节点区域支持卡片和列表。管理员可通过首页右上角的「按服务器配置 Ping 任务」选择全局任务和单台服务器的覆盖任务，探测区可切换全部任务平均、运营商名称或完整任务名称，并独立选择柱状或曲线。单台服务器的选择清空后使用全局设置。
+
+本版基于 [Glassmorphism](https://github.com/sanrokamlan-prog/komari-theme-Glassmorphism)，亮暗背景、地图、配色和快捷控制参考 [Gloria Universe](https://github.com/TonyStarkJr2021/komari-theme-Gloria-Universe)。地图轮廓来自 [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/)。
+
 ![Vue](https://img.shields.io/badge/Vue-3-42b883?style=for-the-badge&logo=vue.js)
 ![Vite](https://img.shields.io/badge/Vite-7-646cff?style=for-the-badge&logo=vite)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-38bdf8?style=for-the-badge&logo=tailwindcss)
 ![Bun](https://img.shields.io/badge/Bun-%3E%3D1.2-000000?style=for-the-badge&logo=bun)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
-**[📥 下载 Release](https://github.com/sanrokamlan-prog/komari-theme-Glassmorphism/releases)** ·
 **[🚀 安装](#-安装--升级)** ·
+**[发布](docs/Publishing.md)** ·
 **[✨ 功能](#-节点详情页全面升级)** ·
 **[⚙️ 设置](#️-主题设置)** ·
 **[🛠️ 开发](#️-本地开发)**
@@ -37,7 +40,7 @@
 
 | 项目     | 说明                                                      |
 | :------- | :-------------------------------------------------------- |
-| 当前版本 | **v3.4.4**                                                |
+| 当前版本 | **v3.4.5**                                                |
 | 主题定位 | Komari Monitor 可导入 zip 主题，不是普通 Web App 部署包   |
 | 视觉风格 | 毛玻璃卡片、动态背景、浅色 / 深色 / 北京时间自动日夜模式  |
 | 数据能力 | Metric Store 优先，旧接口自动 fallback，兼容 Komari 1.2.x |
@@ -47,6 +50,12 @@
 > 好看只是外壳。v3 真正的重点，是把 Metric、Ping、流量、费用、健康分析和运维工具整合成日常真的会打开来看的监控面板。
 
 ---
+
+## v3.4.5 · 定制版首次发布
+
+- 首页加入节点地图，调整亮暗背景、节点状态筛选和访客信息布局。
+- 保留服务器卡片与列表，支持全局和逐台绑定 Ping 任务，可切换运营商名称、完整任务名称与全部任务平均。
+- 发布包自动写入当前 GitHub 仓库地址，支持从 Komari 后台在线导入和更新。发布步骤见 [主题发布指南](docs/Publishing.md)。
 
 ## 📡 v3.4.4 · 后台新标签页、城市定位与窗口 Ping 统计
 
@@ -96,7 +105,7 @@
 
 ### 可选首页三网小曲线（A4）
 
-在后台 **主题设置 → 05 · 节点卡片、列表与快捷控制** 开启 **显示三网延迟（A4）**，选择线路，再开启 **三网新版样式**。两个开关默认关闭，卡片默认尺寸仍为 compact。
+在后台 **主题设置 → 05 · 节点卡片、列表与快捷控制** 开启 **按任务显示 Ping**，选择线路，再开启 **Ping 曲线样式**。两个开关默认关闭，卡片默认尺寸仍为 compact。
 
 - 每张卡片显示最多三条线路的名称、最近一小时窗口平均延迟、历史曲线和窗口丢包率。无历史时显示缺测，窗口内全部探测失败时显示“不可达”。
 - 鼠标悬停或手机轻点曲线查看历史时段；手机滑动仍可滚动页面，点外部收起。键盘左右方向键也可选点，Escape 关闭。点击线路名称打开完整 Ping 图表。
@@ -111,7 +120,7 @@
 
 ## 📜 历史版本速览
 
-完整逐版记录见 [GitHub Releases](https://github.com/sanrokamlan-prog/komari-theme-Glassmorphism/releases) 与 [AICACHE.md](AICACHE.md)。
+上游版本记录见 [原版 Glassmorphism Releases](https://github.com/sanrokamlan-prog/komari-theme-Glassmorphism/releases) 与 [AICACHE.md](AICACHE.md)。
 
 - **v3.3.8** — 详情页与财务选择器改用主题 Select，修复暗色弹层（[#56](https://github.com/sanrokamlan-prog/komari-theme-Glassmorphism/issues/56)）
 - **v3.3.7** — 累计流量历史改按时间桶末值展示，不再被平均降采样压低
@@ -238,11 +247,11 @@ common:getRecords / legacy records fallback
 
 ## 🪟 首页驾驶舱
 
-- 地球、点阵地球、平铺地图三种视觉模式
+- 节点地图、贴图地球、点阵地球和平铺地图四种视觉模式
 - 卡片 / 列表双视图，列表在密集节点下自动虚拟化
 - `mini` / `compact` / `comfortable` / `large` 四档卡片密度，默认保持 `compact`
 - 官方、基础、运维、资源、财务、流量、GPU、资产、完整和自定义总览方案
-- 月成本、总流量、上下行、峰值、离线、高负载、即将到期等快捷控制
+- 收藏、总流量、上下行、峰值、离线、高负载、即将到期等快捷控制
 - 节点 `message` 在卡片 / 列表以纯文本提示，不使用 `v-html`
 - 自定义图片 / 视频背景、毛玻璃配色预设、色觉辅助配色和动画减弱选项
 
@@ -344,29 +353,30 @@ API / RPC
 
 ## 📦 安装 / 升级
 
-### 方式一：使用 GitHub 仓库地址
+1. 管理员登录 Komari 后台，在 **主题管理** 点击 **导入主题**。
+2. 填写本定制版的 GitHub 仓库首页地址，点击 **检测 → 确认导入**。
+3. 将 **Komari Glassmorphism 定制版** 设为当前主题，按需修改地图、节点视图和 Ping 设置。
 
-Komari 后台支持直接填写仓库地址并拉取最新 Release：
+后续版本可在主题卡片上更新，也可用同一仓库地址再次导入。首次发布按 [主题发布指南](docs/Publishing.md) 操作。需要本地安装时，可将 `bun run build` 生成的主题 ZIP 上传到 **主题管理**。
 
-```text
-https://github.com/sanrokamlan-prog/komari-theme-Glassmorphism
-```
-
-### 方式二：手动安装 Release
-
-1. 打开 [Releases](https://github.com/sanrokamlan-prog/komari-theme-Glassmorphism/releases)
-2. 下载最新的 `komari-theme-Glassmorphism-build-*.zip`
-3. 登录 Komari Monitor 后台，进入 **设置 → 主题管理**
-4. 上传 zip 并启用主题
-5. 在主题设置中调整视觉、卡片、快捷控制和高级工具
-
-> 请上传 Release 附件中的主题 zip，不要上传 GitHub 自动生成的源码压缩包。
+主题 ID 为 `Glassmorphism-Starlight`，可以与原版 Glassmorphism 并存。Komari 按主题 ID 保存主题选项，原版主题里的显示和 Ping 绑定需要在定制版重新设置。已有 Komari Ping 任务可以在配置弹窗继续选择。
 
 ---
 
 ## 🛠️ 本地开发
 
 环境要求：Node.js `^20.19.0` 或 `>=22.12.0`，Bun `>=1.2.0`。
+
+使用本地演示数据查看地图、节点和 Ping 设置：
+
+```bash
+bun install
+bun run dev:demo
+```
+
+打开终端中 Vite 打印的 `Local` 地址，默认是 `http://127.0.0.1:5173/`。演示数据和 Ping 设置只在当前预览进程内有效。
+
+连接真实 Komari 时使用 `VITE_API_TARGET=http://127.0.0.1:25774 bun run dev`，将地址改成自己的 Komari 后端地址。
 
 ```bash
 bun install
@@ -412,14 +422,6 @@ dist/
 - 📢 分享给更多 Komari 用户
 
 你的每一个 Star，都是继续维护更新的动力。
-
----
-
-## ☕ Donation / Sponsor
-
-如果你喜欢这个项目，也欢迎支持后续开发。每一份支持都会用于功能开发、Bug 修复、性能优化、文档和长期维护。
-
-感谢 **可乐杯里泡枸杞**、**Leo Lin**、**HelloWorldx** 、**johnmill**的捐赠支持。
 
 ---
 

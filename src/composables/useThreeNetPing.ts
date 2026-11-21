@@ -6,7 +6,7 @@ import { computed, onScopeDispose, shallowRef, toValue, watch } from 'vue'
 import { loadPublicPingTasks } from '@/services/metrics.service'
 import { subscribeVisibleRefresh } from '@/services/visibleRefresh.service'
 import { useAppStore } from '@/stores/app'
-import { shortenPingTaskName } from '@/utils/threeNetSettings'
+import { getPingTaskDisplayName } from '@/utils/threeNetSettings'
 
 // Adapted from towersip: explicit IDs, per-node bindings, and separate history
 // computations from status metadata so polling does not rebuild SVG paths.
@@ -55,7 +55,7 @@ export function useThreeNetPing(node: MaybeRefOrGetter<NodeData>, stats: ReturnT
   }))
   const items = computed(() => historyItems.value.map((item) => {
     const sample = toValue(node).ping?.[String(item.id)]
-    const name = sample?.name || tasks.value.find(task => task.id === item.id)?.name || `任务 ${item.id}`
+    const name = sample?.name?.trim() || tasks.value.find(task => task.id === item.id)?.name?.trim() || `任务 ${item.id}`
     // Use the same one-hour window as the sparkline. A recovered latest sample
     // must not hide packet loss recorded earlier in that window.
     const loss = item.stats.hasData ? item.stats.avgLoss : null
@@ -64,7 +64,7 @@ export function useThreeNetPing(node: MaybeRefOrGetter<NodeData>, stats: ReturnT
     return {
       ...item,
       name,
-      label: shortenPingTaskName(name, `#${item.id}`),
+      label: getPingTaskDisplayName(name, app.threeNetPingLabelMode),
       latencyValue: latency,
       lossValue: loss,
       latency: latency === null ? '—' : latency < 0 ? '不可达' : `${Math.round(latency)} ms`,

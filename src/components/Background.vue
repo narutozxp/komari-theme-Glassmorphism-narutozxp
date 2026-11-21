@@ -133,7 +133,7 @@ onUnmounted(() => {
 <template>
   <div class="background-container" :style="backgroundContainerStyle">
     <Transition name="fade">
-      <div v-if="showDefaultBackground" class="default-background" />
+      <div v-if="showDefaultBackground" class="default-background" :class="{ 'default-background--still': appStore.disablePageAnimation }" />
     </Transition>
     <Transition name="fade">
       <div v-if="showLoadingBackground" class="background-loading" />
@@ -180,22 +180,83 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background-image: url('/images/default-background-v2.webp');
-  background-position: center bottom;
+  background-color: #eee8ff;
+  background-image: url('/images/monitor-background-light.png');
+  background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  filter: saturate(1.12) contrast(1.02);
+  filter: saturate(1.14) contrast(1.02) brightness(1.01);
   transform: scale(1.01);
   transform-origin: center;
 }
 
 .dark .default-background {
-  filter: brightness(0.38) saturate(0.82) contrast(1.08);
+  background-color: #050816;
+  background-image: url('/images/default-background-v2.webp');
+  filter: brightness(0.62) saturate(0.92) contrast(1.12);
+}
+
+.default-background::before,
+.default-background::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+}
+
+.default-background::before {
+  background:
+    radial-gradient(circle at 82% 12%, rgb(167 139 250 / 0.14), transparent 34%),
+    radial-gradient(circle at 8% 62%, rgb(34 211 238 / 0.11), transparent 32%),
+    radial-gradient(circle at 64% 86%, rgb(244 114 182 / 0.1), transparent 32%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.08), rgb(233 213 255 / 0.1));
+}
+
+.dark .default-background::before {
+  background:
+    radial-gradient(circle at 82% 12%, rgb(155 92 255 / 0.18), transparent 32%),
+    linear-gradient(135deg, rgb(5 8 22 / 0.1), rgb(36 19 74 / 0.18));
+}
+
+.default-background::after {
+  inset: -24px;
+  opacity: 0.48;
+  background-image:
+    radial-gradient(circle at 18% 22%, #fff 0 1px, transparent 1.6px),
+    radial-gradient(circle at 64% 35%, #57d6ff 0 1px, transparent 1.7px),
+    radial-gradient(circle at 34% 78%, #ff7ac8 0 1px, transparent 1.6px),
+    radial-gradient(circle at 88% 67%, #ffd77a 0 1px, transparent 1.5px);
+  background-size:
+    180px 190px,
+    260px 230px,
+    310px 290px,
+    220px 270px;
+  animation: background-drift 36s linear infinite alternate;
+}
+
+.dark .default-background::after {
+  opacity: 0.32;
+}
+
+.default-background--still::after {
+  animation: none;
+}
+
+@keyframes background-drift {
+  to {
+    transform: translate3d(-24px, 18px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .default-background::after {
+    animation: none;
+  }
 }
 
 @media (max-width: 768px) {
   .default-background {
-    background-position: 50% 78%;
+    background-position: 68% center;
     transform: scale(1.02);
   }
 }

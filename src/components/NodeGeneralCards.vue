@@ -716,12 +716,16 @@ watch(
   { immediate: true, deep: true },
 )
 const activeEarthRenderer = ref(appStore.earthRenderer)
+const isStarMap = computed(() => showEarth.value && activeEarthRenderer.value === 'starMap')
 const isTiledEarth = computed(() => showEarth.value && activeEarthRenderer.value === 'tiled')
 const shouldRenderHeader = computed(() => showEarth.value || visibleCards.value.length > 0)
 const hasExtraCards = computed(() => visibleCards.value.length > 6)
 const wrapperClass = computed(() => {
   if (!showEarth.value)
     return 'p-4 grid grid-cols-1 gap-2 h-auto'
+
+  if (isStarMap.value)
+    return 'p-4 grid grid-cols-12 gap-3 items-start md:items-stretch'
 
   if (isTiledEarth.value)
     return 'p-3 sm:p-4 grid grid-cols-12 gap-2 sm:gap-3 h-auto min-h-[40rem] sm:min-h-[30rem] md:min-h-[36rem] lg:min-h-[40rem]'
@@ -731,6 +735,12 @@ const wrapperClass = computed(() => {
     : 'p-4 grid grid-cols-12 grid-rows-1 gap-2 h-auto md:h-58'
 })
 const earthClass = computed(() => {
+  if (isStarMap.value) {
+    return visibleCards.value.length > 0
+      ? 'col-span-12 row-start-1 md:col-span-6 md:col-start-7'
+      : 'col-span-12'
+  }
+
   if (isTiledEarth.value)
     return 'col-span-12 row-start-2 min-h-[18rem] h-[18rem] sm:h-[20rem] md:h-[24rem] lg:h-[28rem]'
 
@@ -740,6 +750,9 @@ const cardGridClass = computed(() => {
   if (!showEarth.value)
     return 'col-span-1 grid grid-cols-3 md:grid-cols-6 gap-2'
 
+  if (isStarMap.value)
+    return 'col-span-12 row-start-2 grid grid-cols-2 sm:grid-cols-3 auto-rows-fr gap-2 md:col-span-6 md:col-start-1 md:row-start-1'
+
   if (isTiledEarth.value)
     return 'col-span-12 row-start-1 z-9 grid grid-cols-12 auto-rows-[4.75rem] sm:auto-rows-[5rem] md:auto-rows-[5.8rem] gap-2 sm:gap-3'
 
@@ -747,7 +760,10 @@ const cardGridClass = computed(() => {
     ? 'h-auto -mt-42 md:mt-0 col-span-12 row-start-3 z-9 md:h-auto md:col-span-6 md:row-start-1 grid grid-cols-12 auto-rows-[5rem] md:auto-rows-[7rem] gap-2'
     : 'h-42 -mt-42 md:mt-0 col-span-12 row-start-3 z-9 md:h-auto md:col-span-6 md:row-start-1 grid grid-cols-12 grid-rows-2 gap-2'
 })
-const cardClass = 'group relative z-10 h-full bg-background/50 border-none hover:bg-background backdrop-blur-sm md:backdrop-blur-none transition-all'
+const cardClass = computed(() => [
+  'group relative z-10 h-full transition-colors',
+  !isStarMap.value && 'bg-background/50 border-none hover:bg-background backdrop-blur-sm md:backdrop-blur-none',
+])
 const cardPositionClasses = [
   'col-span-4 row-span-1 col-start-1 row-start-1',
   'col-span-4 row-span-1 col-start-1 row-start-2',
@@ -771,6 +787,9 @@ const unitClass = 'text-[11px] md:text-xs font-medium text-muted-foreground trun
 function getCardPositionClass(index: number): string {
   if (!showEarth.value)
     return 'col-span-1 min-h-18 md:min-h-28'
+
+  if (isStarMap.value)
+    return 'min-w-0 min-h-18 md:min-h-22'
 
   if (isTiledEarth.value)
     return tiledCardPositionClasses[index] ?? 'col-span-6 sm:col-span-3 row-span-1'
@@ -850,7 +869,8 @@ onMounted(async () => {
             <span class="text-xs font-medium tracking-wider text-muted-foreground truncate">{{ card.label }}</span>
             <Icon
               :icon="card.icon" :width="20" :height="20"
-              class="shrink-0 text-slate-500/20 group-hover:text-slate-500 transition-colors"
+              class="shrink-0 transition-colors"
+              :class="isStarMap ? 'text-primary/65' : 'text-slate-500/20 group-hover:text-slate-500'"
             />
           </div>
           <DataTooltip
@@ -863,7 +883,8 @@ onMounted(async () => {
             <Transition v-bind="metricSwitchTransitionProps">
               <div
                 :key="`${card.key}-${summaryTransitionKey}`"
-                class="flex items-baseline gap-1 min-w-0"
+                class="flex min-w-0 items-baseline gap-1"
+                :class="isStarMap && 'flex-wrap gap-y-0.5'"
                 :style="getMetricSwitchStyle(index)"
               >
                 <span class="text-md md:text-2xl font-bold leading-none tracking-tight truncate">

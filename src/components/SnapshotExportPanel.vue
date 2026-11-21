@@ -128,9 +128,10 @@ function formatPrice(row: SnapshotRow): string {
   return `${amount.symbol}${amount.value} ${amount.currency}`
 }
 
-function formatMonthlyCost(row: SnapshotRow): string {
+function formatMonthlyCost(row: SnapshotRow, includeCurrencyCode = false): string {
   const amount = financeHelper.formatFinanceAmount(row.monthlyCostCNY, 'CNY')
-  return `${amount.symbol}${amount.value} CNY`
+  const display = `${amount.symbol}${amount.value}`
+  return includeCurrencyCode ? `${display} ${amount.currency}` : display
 }
 
 function getCostPerCore(row: SnapshotRow): number | null {
@@ -236,7 +237,7 @@ const csvColumns: CsvColumn[] = [
   { label: '运行时间', value: row => formatUptime(row.uptimeSeconds) },
   { label: '价格', value: row => formatPrice(row) },
   { label: '计费周期', value: row => formatBillingCycle(row.billingCycleDays) },
-  { label: '月成本', value: row => formatMonthlyCost(row) },
+  { label: '月成本', value: row => formatMonthlyCost(row, true) },
   { label: '每核月成本', value: row => formatValueCost(getCostPerCore(row)) },
   { label: '每 GB 内存月成本', value: row => formatValueCost(getCostPerMemoryGb(row)) },
   { label: '每 GB 流量月成本', value: row => formatValueCost(getCostPerTrafficGb(row)) },
@@ -316,7 +317,7 @@ function buildJsonNode(row: SnapshotRow) {
     billing: {
       price: formatPrice(row),
       cycle: formatBillingCycle(row.billingCycleDays),
-      monthlyCost: formatMonthlyCost(row),
+      monthlyCost: formatMonthlyCost(row, true),
       valueMetrics: {
         costPerCore: formatValueCost(getCostPerCore(row)),
         costPerMemoryGb: formatValueCost(getCostPerMemoryGb(row)),
@@ -467,7 +468,7 @@ async function exportCsv(): Promise<void> {
           {{ financeHelper.formatFinanceAmount(totalMonthlyCostCNY, 'CNY').symbol }}{{ financeHelper.formatFinanceAmount(totalMonthlyCostCNY, 'CNY').value }}
         </div>
         <div class="mt-1 text-[11px] text-muted-foreground">
-          CNY 估算
+          人民币估算
         </div>
       </CardX>
     </div>

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { getCurrencyDisplaySymbol, getCurrencyName, SUPPORTED_CURRENCIES } from '@/utils/currency'
 import * as financeHelper from '@/utils/financeHelper'
 import { formatPriceWithCycle, getDaysUntilExpired, getExpireStatus, isFreeNode, isFreePrice } from '@/utils/tagHelper'
 
@@ -82,7 +83,10 @@ const trafficModeLabels: Record<MeteredTrafficMode, string> = {
   down: '仅下行',
 }
 
-const currencyOptions = financeHelper.SUPPORTED_CURRENCIES.map(item => ({ value: item, label: item }))
+const currencyOptions = SUPPORTED_CURRENCIES.map(item => ({
+  value: item,
+  label: `${getCurrencyDisplaySymbol(item)} ${getCurrencyName(item)}`,
+}))
 const trafficModeOptions = Object.entries(trafficModeLabels).map(([value, label]) => ({ value, label }))
 const visibleNodeOptions = computed(() => visibleNodes.value.map(node => ({ value: node.uuid, label: node.name })))
 
@@ -321,7 +325,7 @@ function formatTraffic(tib: number): string {
               :model-value="currency"
               :options="currencyOptions"
               aria-label="显示币种"
-              class="h-8 w-24 px-2 text-xs"
+              class="h-8 w-28 shrink-0 px-2 text-xs"
               @update:model-value="handleCurrencyChange"
             />
           </div>
@@ -509,14 +513,14 @@ function formatTraffic(tib: number): string {
                 汇率
               </h3>
               <p class="text-xs text-muted-foreground">
-                {{ sourceLabels[source] }} · {{ formatRateUpdatedAt() }} · 1 CNY 对应数值
+                {{ sourceLabels[source] }} · {{ formatRateUpdatedAt() }} · 1 元人民币对应数值
               </p>
             </div>
             <Select
               :model-value="currency"
               :options="currencyOptions"
               aria-label="显示币种"
-              class="h-8 w-24 px-2 text-xs"
+              class="h-8 w-28 shrink-0 px-2 text-xs"
               @update:model-value="handleCurrencyChange"
             />
             <Button type="button" size="sm" variant="outline" class="h-8 gap-1.5" @click="emit('resetRates')">
@@ -525,8 +529,8 @@ function formatTraffic(tib: number): string {
           </div>
 
           <div class="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-            <label v-for="item in financeHelper.SUPPORTED_CURRENCIES" :key="item" class="grid grid-cols-[2.5rem_1fr] items-center gap-2 text-xs">
-              <span class="font-medium">{{ item }}</span>
+            <label v-for="item in SUPPORTED_CURRENCIES" :key="item" class="grid grid-cols-[3.75rem_minmax(0,1fr)] items-center gap-2 text-xs">
+              <span class="font-medium">{{ getCurrencyName(item) }}</span>
               <Input
                 type="number"
                 min="0"

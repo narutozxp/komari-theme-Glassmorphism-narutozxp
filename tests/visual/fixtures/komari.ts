@@ -1,6 +1,7 @@
-import type { Page, Route } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
-const FIXED_NOW = '2026-07-25T12:00:00.000Z'
+export const FIXED_NOW = '2026-07-25T12:00:00.000Z'
+export const fixtureVisitor = { success: true, ip: '2001:db8::25', city: 'Tokyo', region: 'Tokyo', country: 'Japan', connection: { org: 'Example Networks' } }
 const GIB = 1024 ** 3
 const TIB = 1024 ** 4
 
@@ -17,7 +18,7 @@ const REGION_FIXTURES = [
 
 export interface VisualFixtureOptions {
   dark?: boolean
-  earthRenderer?: 'cobe' | 'realistic' | 'tiled'
+  earthRenderer?: 'starMap' | 'cobe' | 'realistic' | 'tiled'
   colorVisionFriendly?: boolean
   viewMode?: 'card' | 'list'
   nodeCardSize?: 'mini' | 'compact' | 'comfortable' | 'large'
@@ -253,8 +254,13 @@ function jsonRpcResult(id: unknown, result: unknown) {
   return { jsonrpc: '2.0', id, result }
 }
 
-async function handleRpc(route: Route, clientFixtures = clients, options: VisualFixtureOptions = {}): Promise<void> {
-  const payload = route.request().postDataJSON() as { id: unknown, method: string, params?: Record<string, unknown> }
+interface FixtureRpcRequest {
+  id: unknown
+  method: string
+  params?: Record<string, unknown>
+}
+
+function handleRpc(payload: FixtureRpcRequest, clientFixtures = clients, options: VisualFixtureOptions = {}) {
   const uuid = typeof payload.params?.uuid === 'string' ? payload.params.uuid : uuidFor(0)
   const pingTasks = options.pingTaskOrdering
     ? [
@@ -367,13 +373,10 @@ async function handleRpc(route: Route, clientFixtures = clients, options: Visual
       result = null
   }
 
-  await route.fulfill({
-    contentType: 'application/json',
-    body: JSON.stringify(jsonRpcResult(payload.id, result)),
-  })
+  return jsonRpcResult(payload.id, result)
 }
 
-export async function installKomariFixture(page: Page, options: VisualFixtureOptions = {}): Promise<void> {
+export function createKomariFixture(options: VisualFixtureOptions = {}) {
   const clientFixtures = buildClients(options.freePriceNode, options.expiryThresholds, options.groupNodeCount)
   if (options.hiddenFirstNode)
     clientFixtures[uuidFor(0)]!.hidden = true
@@ -391,7 +394,7 @@ export async function installKomariFixture(page: Page, options: VisualFixtureOpt
     rpcTransportMode: 'http',
     defaultViewMode: options.viewMode ?? 'card',
     nodeCardSize: options.nodeCardSize ?? 'compact',
-    earthRenderer: options.earthRenderer ?? 'realistic',
+    ...(options.earthRenderer ? { earthRenderer: options.earthRenderer } : {}),
     hideEarth: options.hideEarth ?? false,
     stopEarth: true,
     visitorInfoEnabled: true,
@@ -420,25 +423,8 @@ export async function installKomariFixture(page: Page, options: VisualFixtureOpt
     )).join('\n'),
   }
 
-  await page.addInitScript(({ fixedNow }) => {
-    localStorage.clear()
-    sessionStorage.clear()
-    const NativeDate = Date
-    class FixedDate extends NativeDate {
-      constructor(...args: ConstructorParameters<typeof Date>) {
-        super(args.length ? args[0] : fixedNow)
-      }
-
-      static now() {
-        return new NativeDate(fixedNow).getTime()
-      }
-    }
-    window.Date = FixedDate as DateConstructor
-  }, { fixedNow: FIXED_NOW })
-
-  await page.route('**/api/public', route => route.fulfill({
-    contentType: 'application/json',
-    body: JSON.stringify({
+  return {
+    publicSettings: () => ({
       status: 'success',
       message: 'ok',
       data: {
@@ -454,23 +440,41 @@ export async function installKomariFixture(page: Page, options: VisualFixtureOpt
         record_preserve_time: 720,
         ping_record_preserve_time: options.pingRetentionHours ?? 720,
         sitename: 'Komari Visual Lab',
-        theme: 'Glassmorphism',
+        theme: 'Glassmorphism-Starlight',
         theme_settings: { ...settings, ...options.themeSettingsOverrides },
         visitor_audit_enabled: false,
       },
     }),
-  }))
-  await page.route('**/api/me', route => route.fulfill({
-    contentType: 'application/json',
-    body: JSON.stringify({ logged_in: options.loggedIn ?? false, username: 'visual-guest' }),
-  }))
-  await page.route('**/api/version', route => route.fulfill({
-    contentType: 'application/json',
-    body: JSON.stringify({ status: 'success', message: 'ok', data: { version: '1.2.6-visual', hash: 'visual' } }),
-  }))
-  await page.route('**/rpc2', route => handleRpc(route, clientFixtures, options))
+    me: () => ({ logged_in: options.loggedIn ?? false, username: 'visual-guest' }),
+    version: () => ({ status: 'success', message: 'ok', data: { version: '1.2.6-visual', hash: 'visual' } }),
+    rpc: (payload: FixtureRpcRequest) => handleRpc(payload, clientFixtures, options),
+  }
+}
+
+export async function installKomariFixture(page: Page, options: VisualFixtureOptions = {}): Promise<void> {
+  const fixture = createKomariFixture(options)
+  await page.addInitScript(({ fixedNow }) => {
+    localStorage.clear()
+    sessionStorage.clear()
+    const NativeDate = Date
+    class FixedDate extends NativeDate {
+      constructor(...args: ConstructorParameters<typeof Date>) {
+        super(args.length ? args[0] : fixedNow)
+      }
+
+      static now() {
+        return new NativeDate(fixedNow).getTime()
+      }
+    }
+    globalThis.Date = FixedDate as DateConstructor
+  }, { fixedNow: FIXED_NOW })
+
+  await page.route('**/api/public', route => route.fulfill({ json: fixture.publicSettings() }))
+  await page.route('**/api/me', route => route.fulfill({ json: fixture.me() }))
+  await page.route('**/api/version', route => route.fulfill({ json: fixture.version() }))
+  await page.route('**/rpc2', route => route.fulfill({ json: fixture.rpc(route.request().postDataJSON()) }))
   await page.route('https://ipwho.is/', route => route.fulfill({
     contentType: 'application/json',
-    body: JSON.stringify({ success: true, ip: '2001:db8::25', city: 'Tokyo', region: 'Tokyo', country: 'Japan', connection: { org: 'Example Networks' } }),
+    body: JSON.stringify(fixtureVisitor),
   }))
 }

@@ -1,12 +1,14 @@
 import type { PermissionKey, VerifyLoginOptions } from '@/services/auth.service'
 import type { MeInfo, PublicSettings } from '@/utils/api'
+import type { GlassColorPreset } from '@/utils/glassTheme'
 import type { ByteDecimalsConfig } from '@/utils/helper'
+import type { PingTaskLabelMode } from '@/utils/threeNetSettings'
 import { useStorageAsync } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { getAuthSession, requirePermission, setAuthSessionFromLogin, verifyLogin } from '@/services/auth.service'
 import { parseIpGeoProviderUrls } from '@/utils/ipGeoProviders'
-import { parseNodePingBindings, parsePingTaskIds } from '@/utils/threeNetSettings'
+import { isPingTaskLabelMode, parseNodePingBindings, parsePingTaskIds } from '@/utils/threeNetSettings'
 
 export type ThemeMode = 'auto' | 'light' | 'dark'
 export type ManagedThemeMode = 'beijing' | 'light' | 'dark'
@@ -90,8 +92,7 @@ type Lang = 'zh-CN' | 'en-US'
 type NodeViewMode = 'card' | 'list'
 type NodeCardSize = 'mini' | 'compact' | 'comfortable' | 'large'
 type RpcTransportMode = 'websocket' | 'http'
-type EarthRenderer = 'realistic' | 'cobe' | 'tiled'
-type GlassColorPreset = 'emerald' | 'soft' | 'contrast' | 'midnight' | 'custom'
+export type EarthRenderer = 'starMap' | 'realistic' | 'cobe' | 'tiled'
 type ColorVisionMode = 'default' | 'accessible'
 export type ChartDashboardCardKey
   = | 'cpu'
@@ -534,6 +535,9 @@ const HOME_QUICK_CONTROL_PRESET_ALIASES: Record<string, HomeQuickControlPreset> 
 }
 
 const GLASS_COLOR_PRESET_ALIASES: Record<string, GlassColorPreset> = {
+  starlight: 'starlight',
+  蓝紫: 'starlight',
+  星空: 'starlight',
   emerald: 'emerald',
   翡翠: 'emerald',
   soft: 'soft',
@@ -871,8 +875,8 @@ function parseGlassCustomColors(settings: ThemeSettings): GlassCustomColors {
 
 function parseGlassColorPreset(value: unknown): GlassColorPreset {
   if (typeof value !== 'string')
-    return 'emerald'
-  return GLASS_COLOR_PRESET_ALIASES[value.trim()] ?? 'emerald'
+    return 'starlight'
+  return GLASS_COLOR_PRESET_ALIASES[value.trim()] ?? 'starlight'
 }
 
 function parseColorVisionMode(value: unknown): ColorVisionMode {
@@ -952,7 +956,7 @@ const useAppStore = defineStore('app', () => {
   }
 
   function isValidEarthRenderer(value: unknown): value is EarthRenderer {
-    return value === 'realistic' || value === 'cobe' || value === 'tiled'
+    return value === 'starMap' || value === 'realistic' || value === 'cobe' || value === 'tiled'
   }
 
   const nodeCardSize = computed<NodeCardSize>(() => {
@@ -1010,7 +1014,7 @@ const useAppStore = defineStore('app', () => {
 
   const earthRenderer = computed<EarthRenderer>(() => {
     const value = themeSettings.value.earthRenderer
-    return isValidEarthRenderer(value) ? value : 'realistic'
+    return isValidEarthRenderer(value) ? value : 'starMap'
   })
 
   const hideEarth = computed<boolean>(() => readBooleanSetting(themeSettings.value, 'hideEarth', false))
@@ -1122,6 +1126,11 @@ const useAppStore = defineStore('app', () => {
 
   const threeNetPingSparkline = computed(() => readBooleanSetting(themeSettings.value, 'threeNetPingSparkline', false))
   const groupNodeCountEnabled = computed(() => readBooleanSetting(themeSettings.value, 'groupNodeCountEnabled', false))
+  const threeNetPingLabelMode = computed<PingTaskLabelMode>(() => {
+    const value = themeSettings.value.threeNetPingLabelMode
+    return isPingTaskLabelMode(value) ? value : 'carrier'
+  })
+
   const threeNetPingTaskIds = computed(() => parsePingTaskIds(themeSettings.value.threeNetPingTaskIds))
   const threeNetPingNodeTaskBindings = computed(() => parseNodePingBindings(themeSettings.value.threeNetPingNodeTaskBindings))
 
@@ -1353,6 +1362,7 @@ const useAppStore = defineStore('app', () => {
     gpuChartEnabled,
     threeNetPingEnabled,
     threeNetPingSparkline,
+    threeNetPingLabelMode,
     groupNodeCountEnabled,
     threeNetPingTaskIds,
     threeNetPingNodeTaskBindings,

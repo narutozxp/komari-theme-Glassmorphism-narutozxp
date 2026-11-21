@@ -51,7 +51,7 @@ for (const mobile of [false, true]) {
     const saves: Record<string, unknown>[] = []
     await installKomariFixture(page, options)
     await page.route('**/api/admin/theme/settings?theme=*', async (route) => {
-      expect(new URL(route.request().url()).searchParams.get('theme')).toBe('Glassmorphism')
+      expect(new URL(route.request().url()).searchParams.get('theme')).toBe('Glassmorphism-Starlight')
       const body = route.request().postDataJSON()
       saves.push(body)
       options.themeSettingsOverrides = body
@@ -81,7 +81,7 @@ for (const mobile of [false, true]) {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: `test-results/three-net-settings-${mobile ? 'mobile' : 'desktop'}.png` })
     options.loggedIn = false
-    await dialog.getByRole('checkbox', { name: '三网新版样式', exact: true }).uncheck()
+    await dialog.getByRole('checkbox', { name: '曲线样式', exact: true }).uncheck()
     await dialog.getByRole('button', { name: '保存配置', exact: true }).click()
     await expect(dialog.getByText('登录状态已过期，请先登录管理员账号。', { exact: true })).toBeVisible()
     expect(saves).toHaveLength(2)
@@ -173,3 +173,47 @@ for (const scope of ['node', 'global'] as const) {
     })
   }
 }
+
+test('probe display switches between carrier names, full task names and averages', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 })
+  const options = {
+    hideEarth: true,
+    pingTaskOrdering: true,
+    threeNetPing: true,
+    loggedIn: true,
+    themeSettingsOverrides: {} as Record<string, unknown>,
+  }
+  await installKomariFixture(page, options)
+  await page.route('**/api/admin/theme/settings?theme=*', async (route) => {
+    options.themeSettingsOverrides = route.request().postDataJSON()
+    await route.fulfill({ status: 204 })
+  })
+  await page.goto('/')
+  const card = page.getByRole('button', { name: '查看节点 主控-洛杉矶 详情' })
+  const task = card.locator('[data-three-net-task="20"]')
+  await expect(task.getByText('电信', { exact: true })).toBeVisible()
+  await expect(card.getByText('$9.9', { exact: true })).toBeVisible()
+
+  const settings = page.getByRole('button', { name: '按服务器配置 Ping 任务', exact: true })
+  const dialog = page.getByRole('dialog')
+  await settings.click()
+  const displayMode = dialog.getByRole('combobox', { name: '探测显示方式' })
+  await displayMode.selectOption('full')
+  await dialog.getByRole('button', { name: '保存配置', exact: true }).click()
+  await expect(dialog.getByRole('button', { name: '配置已保存', exact: true })).toBeDisabled()
+  expect(options.themeSettingsOverrides.threeNetPingLabelMode).toBe('full')
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(task.getByText('浙江电信', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Close toast', exact: true }).click()
+  await settings.click()
+  await displayMode.selectOption('summary')
+  await dialog.getByRole('checkbox', { name: '曲线样式', exact: true }).uncheck()
+  await dialog.getByRole('button', { name: '保存配置', exact: true }).click()
+  await expect(dialog.getByRole('button', { name: '配置已保存', exact: true })).toBeDisabled()
+  expect(options.themeSettingsOverrides.threeNetPingEnabled).toBe(false)
+  expect(options.themeSettingsOverrides.threeNetPingTaskIds).toBe('[20,10,30]')
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(card.getByText('平均延迟', { exact: true })).toBeVisible()
+  await expect(card.getByText('平均丢包', { exact: true })).toBeVisible()
+})

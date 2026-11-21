@@ -4,7 +4,7 @@ import type { HomeQuickControlKey } from '@/stores/app'
 import type { NodeData } from '@/stores/nodes'
 import { Icon } from '@iconify/vue'
 import { useDebounceFn } from '@vueuse/core'
-import { computed, defineAsyncComponent, nextTick, onActivated, onDeactivated, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onActivated, onDeactivated, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DeferredRender from '@/components/DeferredRender.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
@@ -17,7 +17,6 @@ import { useVisitorAudit } from '@/composables/useVisitorAudit'
 import { UI_CONFIG } from '@/constants/ui'
 import { useAppStore } from '@/stores/app'
 import { useNodesStore } from '@/stores/nodes'
-import * as financeHelper from '@/utils/financeHelper'
 import {
   getRealtimePeakSpeed,
   getTotalTraffic,
@@ -25,10 +24,11 @@ import {
   isHighLoadNode,
 } from '@/utils/nodeMetricsHelper'
 import { isNodeMatchSearch } from '@/utils/nodeSearch'
-import { isFreeNode } from '@/utils/tagHelper'
+
+type VisibleQuickControlKey = Exclude<HomeQuickControlKey, 'monthlyCost'>
 
 interface QuickControlOption {
-  key: HomeQuickControlKey
+  key: VisibleQuickControlKey
   label: string
   icon: string
 }
@@ -83,9 +83,7 @@ onDeactivated(() => {
 const searchText = ref('')
 const debouncedSearchText = ref('')
 const activeHomeTool = ref<HomeToolKey>('nodes')
-const activeQuickControl = ref<HomeQuickControlKey | null>(null)
-const exchangeRates = ref(financeHelper.DEFAULT_EXCHANGE_RATES)
-const excludeFreeNodes = ref(true)
+const activeQuickControl = ref<VisibleQuickControlKey | null>(null)
 const pingDialogNode = ref<NodeData | null>(null)
 
 const homeToolPermissionMap: Record<PrivateHomeToolKey, PermissionKey> = {
@@ -96,9 +94,8 @@ const homeToolPermissionMap: Record<PrivateHomeToolKey, PermissionKey> = {
   auditLog: 'auditLog',
 }
 
-const quickControlDefinitions: Record<HomeQuickControlKey, QuickControlOption> = {
+const quickControlDefinitions: Record<VisibleQuickControlKey, QuickControlOption> = {
   favorite: { key: 'favorite', label: '收藏', icon: 'tabler:star' },
-  monthlyCost: { key: 'monthlyCost', label: '月成本', icon: 'tabler:calendar-dollar' },
   totalTraffic: { key: 'totalTraffic', label: '总流量', icon: 'tabler:database' },
   upload: { key: 'upload', label: '上行', icon: 'tabler:chevron-up' },
   download: { key: 'download', label: '下行', icon: 'tabler:chevron-down' },
@@ -126,7 +123,9 @@ const updateDebouncedSearch = useDebounceFn((value: string) => {
 }, 300)
 
 watch(searchText, (value) => {
-  updateDebouncedSearch(value)
+  if (!value)
+    debouncedSearchText.value = ''
+  void updateDebouncedSearch(value)
 })
 
 const groups = computed(() => [
@@ -134,7 +133,7 @@ const groups = computed(() => [
   ...nodesStore.groups.map(g => ({ tab: g, name: g, count: nodesStore.groupCounts.get(g) ?? 0 })),
 ])
 
-const quickControlKeys = computed<HomeQuickControlKey[]>(() => appStore.homeQuickControlOrder.filter(key => key !== 'monthlyCost'))
+const quickControlKeys = computed(() => appStore.homeQuickControlOrder.filter(key => key !== 'monthlyCost'))
 const quickControls = computed(() => quickControlKeys.value.map(key => quickControlDefinitions[key]))
 const showQuickControls = computed(() => appStore.homeQuickControlsEnabled && quickControls.value.length > 0)
 
@@ -152,12 +151,6 @@ watch(
   { immediate: true },
 )
 
-onMounted(async () => {
-  excludeFreeNodes.value = financeHelper.shouldExcludeFreeNodes()
-  const { rates } = await financeHelper.getDailyExchangeRates()
-  exchangeRates.value = rates
-})
-
 watch(
   () => nodesStore.groups,
   (gs) => {
@@ -168,13 +161,6 @@ watch(
   },
   { immediate: true },
 )
-
-function getNodeMonthlyCostCNY(node: NodeData): number {
-  if (excludeFreeNodes.value && isFreeNode(node))
-    return 0
-
-  return financeHelper.calculateMonthlyCostCNY(node, exchangeRates.value)
-}
 
 function sortNodesByComputedValue(nodes: NodeData[], selector: (node: NodeData) => number): NodeData[] {
   return nodes
@@ -194,15 +180,12 @@ function placeOfflineNodesLast(nodes: NodeData[]): NodeData[] {
   })
 }
 
-function getQuickControlNodes(nodes: NodeData[], control: HomeQuickControlKey | null): NodeData[] {
+function getQuickControlNodes(nodes: NodeData[], control: VisibleQuickControlKey | null): NodeData[] {
   let result: NodeData[]
 
   switch (control) {
     case 'favorite':
       return nodes.filter(node => appStore.isFavoriteNode(node.uuid))
-    case 'monthlyCost':
-      result = sortNodesByComputedValue(nodes, getNodeMonthlyCostCNY)
-      break
     case 'totalTraffic':
       result = sortNodesByComputedValue(nodes, getTotalTraffic)
       break
@@ -231,7 +214,7 @@ function getQuickControlNodes(nodes: NodeData[], control: HomeQuickControlKey | 
   return placeOfflineNodesLast(result)
 }
 
-function getQuickControlCount(nodes: NodeData[], control: HomeQuickControlKey): number {
+function getQuickControlCount(nodes: NodeData[], control: VisibleQuickControlKey): number {
   switch (control) {
     case 'favorite':
       return nodes.reduce((count, node) => count + (appStore.isFavoriteNode(node.uuid) ? 1 : 0), 0)
@@ -280,12 +263,12 @@ const deferredNodeCardHeight = computed(() => {
   return base + Math.max(0, taskCount - 1) * rowHeight
 })
 
-const quickControlCounts = computed<Record<HomeQuickControlKey, number>>(() => {
+const quickControlCounts = computed<Record<VisibleQuickControlKey, number>>(() => {
   let base = groupNodeList.value
   if (debouncedSearchText.value.trim())
     base = base.filter(n => isNodeMatchSearch(n, debouncedSearchText.value))
 
-  const counts = {} as Record<HomeQuickControlKey, number>
+  const counts = {} as Record<VisibleQuickControlKey, number>
   for (const key of quickControlKeys.value)
     counts[key] = getQuickControlCount(base, key)
   return counts
@@ -326,8 +309,12 @@ function getNodeItemTransitionStyle(index: number): Record<string, string> {
   }
 }
 
-function setQuickControl(key: HomeQuickControlKey) {
-  activeQuickControl.value = activeQuickControl.value === key ? null : key
+function setQuickControl(key: VisibleQuickControlKey | null) {
+  const next = activeQuickControl.value === key ? null : key
+  if (activeQuickControl.value === next)
+    return
+
+  activeQuickControl.value = next
   void recordVisitorEvent({
     event: 'filter_change',
     path: '/',
@@ -335,6 +322,11 @@ function setQuickControl(key: HomeQuickControlKey) {
     target: activeQuickControl.value ?? 'all',
     detail: { active: Boolean(activeQuickControl.value), result_count: nodeList.value.length },
   })
+}
+
+function resetNodeControls() {
+  clearSearch()
+  setQuickControl(null)
 }
 
 function setNodeViewMode(mode: 'card' | 'list') {
@@ -453,48 +445,49 @@ const nodeCardGridClass = computed(() => {
     <div class="node-info p-4 pt-0 flex flex-col gap-4 relative z-1 pointer-events-none" :class="!!appStore.hideGeneralCard && 'pt-4'">
       <div class="nodes min-w-0">
         <Tabs v-model="appStore.nodeSelectedGroup" class="w-full flex-col gap-4">
-          <div class="flex flex-col gap-2 xl:flex-row xl:items-center">
-            <div class="home-controls-scroll min-w-0 overflow-x-auto overscroll-x-contain rounded-sm pointer-events-auto touch-pan-x">
-              <div class="flex w-max gap-2">
-                <TabsList class="w-max h-8 bg-background/50 backdrop-blur-xl rounded-md pointer-events-auto">
+          <div class="home-controls flex flex-col gap-2.5 pointer-events-auto">
+            <div class="flex min-w-0 flex-col gap-2 md:flex-row">
+              <div class="max-w-full overflow-x-auto overscroll-x-contain rounded-lg md:max-w-[45%]">
+                <TabsList class="home-control-surface h-auto w-max min-w-full rounded-lg p-1" aria-label="服务器分组">
                   <TabsTrigger
                     v-for="g in groups" :key="g.name" :value="g.name"
-                    class="h-6.5 flex-none shrink-0 text-xs border-none data-[state=active]:text-selection shadow-none rounded-sm"
+                    class="home-control-button h-8 flex-none shrink-0 rounded-md px-3 text-sm shadow-none"
+                    @click="g.name === 'all' && resetNodeControls()"
+                    @keydown.enter="g.name === 'all' && resetNodeControls()"
+                    @keydown.space="g.name === 'all' && resetNodeControls()"
                   >
                     {{ g.tab }}
-                    <span v-if="appStore.groupNodeCountEnabled" class="ml-1 tabular-nums opacity-70">{{ g.count }}</span>
+                    <span v-if="appStore.groupNodeCountEnabled" class="home-control-count">{{ g.count }}</span>
                   </TabsTrigger>
                 </TabsList>
+              </div>
 
-                <div
-                  v-if="showQuickControls && activeHomeTool === 'nodes'"
-                  class="flex h-8 w-max items-center gap-1 rounded-md bg-background/50 px-1 backdrop-blur-xl pointer-events-auto"
+              <div
+                v-if="showQuickControls && activeHomeTool === 'nodes'"
+                class="home-control-surface flex min-w-0 flex-1 flex-wrap items-center gap-1 rounded-lg p-1"
+                role="group"
+                aria-label="快捷筛选和排序"
+              >
+                <button
+                  v-for="control in quickControls" :key="control.key"
+                  type="button"
+                  class="home-control-button inline-flex h-8 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                  :aria-pressed="activeQuickControl === control.key"
+                  :aria-label="`${control.label}，${quickControlCounts[control.key] ?? 0} 台节点`"
+                  @click="setQuickControl(control.key)"
                 >
-                  <button
-                    v-for="control in quickControls" :key="control.key"
-                    type="button"
-                    class="inline-flex h-6.5 flex-none shrink-0 items-center gap-1 rounded-sm px-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                    :class="activeQuickControl === control.key ? 'bg-background text-selection shadow-sm' : ''"
-                    :aria-pressed="activeQuickControl === control.key"
-                    :aria-label="`切换到${control.label}节点，${quickControlCounts[control.key] ?? 0} 台`"
-                    @click="setQuickControl(control.key)"
-                  >
-                    <Icon :icon="control.icon" :width="12" :height="12" />
-                    <span>{{ control.label }}</span>
-                    <span class="rounded-full bg-slate-500/10 px-1 text-[10px] tabular-nums text-foreground/65">
-                      {{ quickControlCounts[control.key] ?? 0 }}
-                    </span>
-                  </button>
-                </div>
+                  <Icon :icon="control.icon" :width="14" :height="14" aria-hidden="true" />
+                  <span>{{ control.label }}</span>
+                  <span class="home-control-count">{{ quickControlCounts[control.key] ?? 0 }}</span>
+                </button>
               </div>
             </div>
-            <div class="search flex min-w-0 flex-wrap gap-2 items-center justify-end pointer-events-auto max-sm:justify-start xl:ml-auto">
-              <div v-if="homeTools.length && appStore.homeAdvancedToolsVisible" class="flex h-8 items-center gap-1 rounded-md bg-background/50 p-0.5 backdrop-blur-xs">
+            <div class="search flex min-w-0 flex-wrap items-center gap-2">
+              <div v-if="homeTools.length && appStore.homeAdvancedToolsVisible" class="home-control-surface flex min-h-9 items-center gap-0.5 rounded-md p-px" role="group" aria-label="首页工具">
                 <Button
                   v-for="tool in homeTools" :key="tool.key"
-                  variant="ghost" size="icon"
-                  class="size-7 rounded-sm text-muted-foreground shadow-none hover:bg-background/60"
-                  :class="[activeHomeTool === tool.key ? '!text-selection !bg-background' : '']"
+                  variant="ghost" size="icon-xs"
+                  class="home-control-button size-7 rounded-sm text-muted-foreground shadow-none"
                   :aria-label="`${tool.label}：${tool.description}`"
                   :aria-pressed="activeHomeTool === tool.key"
                   :title="tool.description"
@@ -506,43 +499,41 @@ const nodeCardGridClass = computed(() => {
 
               <Button
                 variant="outline" size="icon" aria-label="卡片视图"
-                class="w-8 h-8 border-none bg-background/50 backdrop-blur-xs shadow-none hover:bg-background/60 rounded-md"
-                :class="[appStore.nodeViewMode === 'card' ? '!text-selection !bg-background' : '']"
+                class="home-control-surface home-control-button size-9 rounded-md shadow-none"
+                :aria-pressed="appStore.nodeViewMode === 'card'"
                 @click="setNodeViewMode('card')"
               >
                 <Icon icon="tabler:layout-grid" :width="14" :height="14" />
               </Button>
               <Button
                 variant="outline" size="icon" aria-label="列表视图"
-                class="w-8 h-8 border-none bg-background/50 backdrop-blur-xs shadow-none hover:bg-background/60 rounded-md"
-                :class="[appStore.nodeViewMode === 'list' ? '!text-selection !bg-background' : '']"
+                class="home-control-surface home-control-button size-9 rounded-md shadow-none"
+                :aria-pressed="appStore.nodeViewMode === 'list'"
                 @click="setNodeViewMode('list')"
               >
                 <Icon icon="tabler:table" :width="14" :height="14" />
               </Button>
-              <div class="relative z-1 h-8" :class="searchText ? 'w-full sm:w-60' : 'w-8'">
-                <div class="absolute top-0 right-0 w-full">
-                  <Input
-                    v-model="searchText" placeholder="搜索名称、地区、IP、CPU"
-                    aria-label="搜索节点"
-                    class="transition-all border-none shadow-none h-8 bg-background/50 backdrop-blur-xs rounded-md hover:!bg-background/60 focus:!pl-7.5 focus:placeholder:!text-muted-foreground focus:!bg-background/80 focus:!ring-slate-500/10"
-                    :class="searchText ? '!w-full sm:!w-60 !pl-7.5 pr-7 placeholder:!text-muted-foreground' : 'w-8 placeholder:text-transparent focus:!w-52 sm:focus:!w-60'"
-                    @keydown.esc.prevent="clearSearch"
-                  />
-                  <Icon
-                    icon="tabler:search" :width="14" :height="14"
-                    class="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                  />
-                  <button
-                    v-if="searchText"
-                    type="button"
-                    class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label="清空搜索"
-                    @click="clearSearch"
-                  >
-                    <Icon icon="tabler:x" :width="14" :height="14" />
-                  </button>
-                </div>
+              <div class="relative min-w-0 flex-1 basis-44 sm:ml-auto sm:max-w-72">
+                <Input
+                  v-model="searchText" placeholder="搜索名称、地区、IP、CPU"
+                  aria-label="搜索节点"
+                  class="home-control-surface h-9 w-full rounded-lg pl-8 pr-9 shadow-none"
+                  @keydown.esc.prevent="clearSearch"
+                />
+                <Icon
+                  icon="tabler:search" :width="16" :height="16"
+                  class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <button
+                  v-if="searchText"
+                  type="button"
+                  class="absolute inset-y-0 right-0 grid w-9 place-items-center rounded-r-lg text-muted-foreground hover:text-foreground"
+                  aria-label="清空搜索"
+                  @click="clearSearch"
+                >
+                  <Icon icon="tabler:x" :width="16" :height="16" aria-hidden="true" />
+                </button>
               </div>
             </div>
           </div>
@@ -628,12 +619,30 @@ const nodeCardGridClass = computed(() => {
   }
 }
 
-.home-controls-scroll {
-  scrollbar-width: none;
+.home-control-surface {
+  border: 1px solid var(--glass-light-border);
+  background: var(--glass-light-control);
 }
 
-.home-controls-scroll::-webkit-scrollbar {
-  display: none;
+.dark .home-control-surface {
+  border-color: var(--glass-dark-border);
+  background: var(--glass-dark-control);
+}
+
+.home-control-button[data-state='active'],
+.home-control-button[aria-pressed='true'] {
+  background: var(--secondary) !important;
+  color: var(--selection) !important;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.home-control-count {
+  border-radius: 999px;
+  background: var(--accent);
+  padding-inline: 0.35rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .node-card-switch-enter-active,

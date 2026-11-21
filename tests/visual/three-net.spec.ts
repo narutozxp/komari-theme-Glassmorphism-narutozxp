@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { escapePingTooltip, pingChartTaskLabels } from '../../src/utils/pingChartPresentation'
 import { smoothPingChartDisplayRows } from '../../src/utils/pingChartSmoothing'
 import { buildSparklineGeometry } from '../../src/utils/sparklinePath'
-import { parseNodePingBindings, parsePingTaskIds, shortenPingTaskName } from '../../src/utils/threeNetSettings'
+import { getPingTaskDisplayName, parseNodePingBindings, parsePingTaskIds } from '../../src/utils/threeNetSettings'
 import { installKomariFixture } from './fixtures/komari'
 
 const UUID = '00000000-0000-4000-8000-000000000001'
@@ -17,7 +17,9 @@ test('curves preserve missing samples, extrema and source data', () => {
   expect(geometry.linePaths.every(path => !path.includes('NaN'))).toBe(true)
   expect(parsePingTaskIds('20,10,20,-1,NaN,30,40')).toEqual([20, 10, 30])
   expect(parsePingTaskIds('[20,10,20,30]')).toEqual([20, 10, 30])
-  expect(shortenPingTaskName('浙江省-电信 IPv6', '#20')).toBe('浙江电信v6')
+  expect(getPingTaskDisplayName('浙江省-电信 IPv6', 'carrier')).toBe('电信')
+  expect(getPingTaskDisplayName('浙江省-电信 IPv6', 'full')).toBe('浙江省-电信 IPv6')
+  expect(getPingTaskDisplayName('东京区域延迟探测', 'carrier')).toBe('东京区域延迟探测')
   expect(parseNodePingBindings('invalid')).toEqual({})
   expect(parseNodePingBindings(`{"${UUID}":[30,20,10],"__proto__":[1]}`)[UUID]).toEqual([30, 20, 10])
   const labels = pingChartTaskLabels([{ id: 1, name: '同名' }, { id: 2, name: '同名' }, { id: 3, name: '同名 · #1' }])

@@ -5,10 +5,10 @@ import { useRouter } from 'vue-router'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import VisitorInfo from '@/components/VisitorInfo.vue'
 import { useVisitorAudit } from '@/composables/useVisitorAudit'
 import { useAppStore } from '@/stores/app'
 
+defineProps<{ contentWidth: string }>()
 const router = useRouter()
 const appStore = useAppStore()
 const { record: recordVisitorEvent } = useVisitorAudit()
@@ -101,15 +101,13 @@ const sitename = computed(() => appStore.publicSettings?.sitename || 'Komari Mon
 </script>
 
 <template>
-  <!-- 访客 IP 组件，全局悬浮 -->
-  <VisitorInfo v-if="!appStore.loading && appStore.visitorInfoEnabled" />
   <ThemePingSettings v-if="pingSettingsOpen" :open="pingSettingsOpen" @update:open="pingSettingsOpen = $event" />
 
   <div
     class="transition-all duration-200 top-0 sticky z-10 border-b border-transparent pt-[env(safe-area-inset-top)]"
     :class="isScrolled ? '!border-slate-500/10 backdrop-blur-lg' : 'bg-transparent'"
   >
-    <div class="px-4 flex-between h-14 max-w-[1280px] mx-auto gap-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+    <div class="px-4 flex-between h-14 mx-auto gap-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]" :class="contentWidth">
       <div class="flex min-w-0 items-center gap-2 sm:gap-3 cursor-pointer" @click="router.push('/')">
         <Avatar class="size-8 shrink-0">
           <AvatarImage :src="siteFavicon" :alt="sitename" />

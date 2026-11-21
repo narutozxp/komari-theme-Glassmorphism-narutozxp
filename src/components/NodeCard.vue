@@ -462,12 +462,12 @@ function hasFlag(): boolean {
             type="button"
             class="group/panel relative flex flex-col rounded-lg bg-slate-500/5"
             :class="[nodeCardPingPanelClass, nodeCardPanelClass, !props.node.online ? 'blur-xs opacity-50' : '']"
-            :title="latencyPanelTooltip"
+            :title="latencyPanelTooltip ? `全部任务 · ${latencyPanelTooltip}` : undefined"
             :aria-label="`${props.node.name} 延迟监测`"
             @click.stop="emit('pingClick')"
           >
             <div class="flex items-center justify-between text-[11px] leading-none">
-              <span class="text-muted-foreground">延迟</span>
+              <span class="text-muted-foreground">平均延迟</span>
               <span class="font-medium">{{ latencyDisplay }}</span>
             </div>
             <div
@@ -491,12 +491,12 @@ function hasFlag(): boolean {
             type="button"
             class="group/panel relative flex flex-col rounded-lg bg-slate-500/5"
             :class="[nodeCardPingPanelClass, nodeCardPanelClass, !props.node.online ? 'blur-xs opacity-50' : '']"
-            :title="lossPanelTooltip"
+            :title="lossPanelTooltip ? `全部任务 · ${lossPanelTooltip}` : undefined"
             :aria-label="`${props.node.name} 丢包监测`"
             @click.stop="emit('pingClick')"
           >
             <div class="flex items-center justify-between text-[11px] leading-none">
-              <span class="text-muted-foreground">丢包</span>
+              <span class="text-muted-foreground">平均丢包</span>
               <span class="font-medium">{{ lossDisplay }}</span>
             </div>
             <div

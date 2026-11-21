@@ -109,7 +109,7 @@ function komariThemeZip(): Plugin {
   }
 }
 
-export default defineConfig({
+export default defineConfig(async ({ mode }) => ({
   define: {
     __BUILD_VERSION__: JSON.stringify(getThemeVersion()),
     __BUILD_GIT_HASH__: JSON.stringify(getCommitHash()),
@@ -119,6 +119,7 @@ export default defineConfig({
     vueDevTools(),
     tailwindcss(),
     komariThemeZip(),
+    ...(mode === 'demo' ? [(await import('./scripts/demo-api')).komariDemo()] : []),
   ],
   resolve: {
     alias: {
@@ -126,21 +127,23 @@ export default defineConfig({
     },
   },
   server: {
-    host: '0.0.0.0',
-    proxy: {
-      '/api': {
-        target: devApiTarget,
-        changeOrigin: true,
-        headers: { Origin: devApiTarget },
-        rewriteWsOrigin: true,
-        ws: true,
-      },
-      '/themes': {
-        target: devApiTarget,
-        changeOrigin: true,
-        headers: { Origin: devApiTarget },
-      },
-    },
+    host: mode === 'demo' ? '127.0.0.1' : '0.0.0.0',
+    proxy: mode === 'demo'
+      ? undefined
+      : {
+          '/api': {
+            target: devApiTarget,
+            changeOrigin: true,
+            headers: { Origin: devApiTarget },
+            rewriteWsOrigin: true,
+            ws: true,
+          },
+          '/themes': {
+            target: devApiTarget,
+            changeOrigin: true,
+            headers: { Origin: devApiTarget },
+          },
+        },
   },
   build: {
     target: ['es2018', 'safari15.4'],
@@ -167,4 +170,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

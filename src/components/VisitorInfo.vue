@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, useId } from 'vue'
 import { useAppStore } from '@/stores/app'
 
 interface VisitorData {
@@ -19,15 +19,15 @@ interface VisitorProvider {
 type JsonRecord = Record<string, unknown>
 
 const visitorFetchTimeout = 8000
-const mobileScrollIdleDelay = 700
-const mobileViewportQuery = '(max-width: 767px)'
 const appStore = useAppStore()
 
 const show = ref(false)
-const dismissed = ref(false)
+const detailsOpen = ref<boolean | null>(null)
+const detailsId = useId()
+const openDetailsButton = ref<HTMLButtonElement>()
+const closeDetailsButton = ref<HTMLButtonElement>()
 const visitorLoading = ref(true)
 const visitorFailed = ref(false)
-const mobileScrolling = ref(false)
 const visitor = ref<VisitorData>({
   ip: '',
   city: '',
@@ -52,7 +52,7 @@ const visitorProviders: VisitorProvider[] = [
 ]
 
 const compactLocation = computed(() => {
-  const parts = [visitor.value.city, visitor.value.region].filter(Boolean)
+  const parts = [...new Set([visitor.value.city, visitor.value.region].filter(Boolean))]
   return parts.join(', ') || visitor.value.country || (visitorLoading.value ? '定位中' : '未知位置')
 })
 
@@ -78,27 +78,10 @@ const firefoxPattern = /Firefox/i
 const safariPattern = /Safari/i
 const macOsPattern = /Mac OS X/i
 const linuxPattern = /Linux/i
-let mobileViewport: MediaQueryList | null = null
-let scrollIdleTimer: number | undefined
-
-function handleScroll(): void {
-  if (!mobileViewport?.matches)
-    return
-
-  mobileScrolling.value = true
-  if (scrollIdleTimer !== undefined)
-    window.clearTimeout(scrollIdleTimer)
-  scrollIdleTimer = window.setTimeout(() => {
-    mobileScrolling.value = false
-    scrollIdleTimer = undefined
-  }, mobileScrollIdleDelay)
-}
+let showTimer: number | undefined
 
 onMounted(async () => {
-  mobileViewport = window.matchMedia(mobileViewportQuery)
-  window.addEventListener('scroll', handleScroll, { passive: true })
-
-  window.setTimeout(() => {
+  showTimer = window.setTimeout(() => {
     show.value = true
   }, 600)
 
@@ -117,16 +100,20 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('scroll', handleScroll)
-  if (scrollIdleTimer !== undefined)
-    window.clearTimeout(scrollIdleTimer)
+  window.clearTimeout(showTimer)
 })
 
-function dismiss() {
-  dismissed.value = true
+async function toggleDetails(open: boolean) {
+  detailsOpen.value = open
+  await nextTick()
+  const button = open ? closeDetailsButton.value : openDetailsButton.value
+  button?.focus({ preventScroll: true })
 }
 
 async function fetchVisitorData(): Promise<VisitorData | null> {
+  if (import.meta.env.DEV && import.meta.env.MODE === 'demo')
+    return fetchProviderData({ url: '/api/demo/visitor', normalize: normalizeIpwhoData })
+
   for (const provider of visitorProviders) {
     const data = await fetchProviderData(provider)
     if (data)
@@ -294,12 +281,13 @@ const siteName = computed(() => appStore.privateFeaturesAllowed ? '尊敬的管�
 </script>
 
 <template>
-  <!-- 底部居中 IP 条（桌面+手机都显示） -->
+  <!-- 桌面悬浮，窄屏在页脚内显示。 -->
   <Transition name="slide-up">
     <div
-      v-if="show && !dismissed && !mobileScrolling"
-      class="fixed bottom-3 left-1/2 z-50 flex w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2
-             items-center gap-1.5 rounded-full px-3 py-1.5 md:bottom-4 md:gap-2 md:px-4
+      v-if="show"
+      class="pointer-events-none mx-auto mb-3 flex w-max max-w-full
+             items-center gap-1.5 rounded-full px-3 py-1.5
+             md:fixed md:bottom-4 md:left-1/2 md:z-50 md:mb-0 md:-translate-x-1/2 md:gap-2 md:px-4
              bg-white/55 dark:bg-black/50
              backdrop-blur-md
              border border-white/40 dark:border-white/10
@@ -315,15 +303,31 @@ const siteName = computed(() => appStore.privateFeaturesAllowed ? '尊敬的管�
     </div>
   </Transition>
 
-  <!-- 左下角详情卡片 — 模仿图二样式 -->
+  <button
+    v-if="show && detailsOpen !== true"
+    ref="openDetailsButton"
+    type="button"
+    class="mx-auto mb-3 flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs text-foreground shadow-sm focus-visible:outline-2 focus-visible:outline-ring md:fixed md:bottom-4 md:left-4 md:z-50 md:mb-0"
+    :class="detailsOpen === null && '2xl:hidden'"
+    :aria-controls="detailsId"
+    aria-expanded="false"
+    @click="toggleDetails(true)"
+  >
+    <Icon icon="icon-park-outline:user" width="14" height="14" aria-hidden="true" />
+    访客信息
+  </button>
+
   <Transition name="slide-left">
-    <div
-      v-if="show && !dismissed"
-      class="fixed bottom-16 left-3 z-50 hidden w-56 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl 2xl:block
-             bg-white/70 dark:bg-neutral-900/70
+    <section
+      v-if="show && detailsOpen !== false"
+      :id="detailsId"
+      aria-label="访客信息"
+      class="mx-auto mb-3 w-56 max-w-full overflow-hidden rounded-2xl
+             bg-white/70 dark:bg-neutral-900/70 md:fixed md:bottom-16 md:left-3 md:z-50 md:mb-0
              backdrop-blur-xl
              border border-white/40 dark:border-white/10
              shadow-2xl"
+      :class="detailsOpen === null && 'hidden 2xl:block'"
     >
       <!-- 顶部：头像 + 名字 + 关闭 -->
       <div class="flex items-center justify-between px-4 pt-4 pb-1">
@@ -338,11 +342,12 @@ const siteName = computed(() => appStore.privateFeaturesAllowed ? '尊敬的管�
           </div>
         </div>
         <button
+          ref="closeDetailsButton"
           type="button"
           class="size-6 rounded-full flex items-center justify-center
                  hover:bg-black/8 dark:hover:bg-white/10 transition-colors"
           aria-label="关闭访客信息"
-          @click="dismiss"
+          @click="toggleDetails(false)"
         >
           <Icon icon="icon-park-outline:close" :width="13" :height="13" class="text-muted-foreground" />
         </button>
@@ -381,7 +386,7 @@ const siteName = computed(() => appStore.privateFeaturesAllowed ? '尊敬的管�
           <span>{{ formatDate() }}</span>
         </div>
       </div>
-    </div>
+    </section>
   </Transition>
 </template>
 
@@ -393,7 +398,7 @@ const siteName = computed(() => appStore.privateFeaturesAllowed ? '尊敬的管�
 .slide-up-enter-from,
 .slide-up-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(20px);
+  transform: translateY(12px);
 }
 
 .slide-left-enter-active,

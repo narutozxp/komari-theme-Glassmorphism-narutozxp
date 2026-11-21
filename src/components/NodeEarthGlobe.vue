@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { EarthRenderer } from '@/stores/app'
 import type { NodeData } from '@/stores/nodes'
 import { computed, defineAsyncComponent, onErrorCaptured, ref, useAttrs, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
@@ -7,7 +8,7 @@ import { supportsGlobeRenderer } from '@/utils/globeCapability'
 const props = defineProps<{
   nodes?: NodeData[]
 }>()
-const emit = defineEmits<{ rendererChange: [renderer: 'realistic' | 'cobe' | 'tiled'] }>()
+const emit = defineEmits<{ rendererChange: [renderer: EarthRenderer] }>()
 
 const attrs = useAttrs()
 const appStore = useAppStore()
@@ -25,15 +26,21 @@ onErrorCaptured(() => {
 const NodeEarthCobeGlobe = defineAsyncComponent(() => import('@/components/NodeEarthCobeGlobe.vue'))
 const NodeEarthRealisticGlobe = defineAsyncComponent(() => import('@/components/NodeEarthRealisticGlobe.vue'))
 const NodeEarthTiledMap = defineAsyncComponent(() => import('@/components/NodeEarthTiledMap.vue'))
+const NodeStarMap = defineAsyncComponent(() => import('@/components/NodeStarMap.vue'))
 
 const effectiveRenderer = computed(() => {
   const renderer = appStore.earthRenderer
-  if (renderer !== 'tiled' && (failed.value || !supportsGlobeRenderer(renderer)))
+  if (failed.value || ((renderer === 'realistic' || renderer === 'cobe') && !supportsGlobeRenderer(renderer)))
     return 'tiled'
   return renderer
 })
 watch(effectiveRenderer, renderer => emit('rendererChange', renderer), { immediate: true })
-const components = { realistic: NodeEarthRealisticGlobe, cobe: NodeEarthCobeGlobe, tiled: NodeEarthTiledMap }
+const components = {
+  starMap: NodeStarMap,
+  realistic: NodeEarthRealisticGlobe,
+  cobe: NodeEarthCobeGlobe,
+  tiled: NodeEarthTiledMap,
+}
 const earthComponent = computed(() => components[effectiveRenderer.value])
 </script>
 

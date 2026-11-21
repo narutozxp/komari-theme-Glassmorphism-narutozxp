@@ -14,6 +14,7 @@ import {
   SelectValue,
   SelectViewport,
 } from 'reka-ui'
+import { ref } from 'vue'
 import { cn } from '@/lib/utils'
 
 export interface SelectOption {
@@ -43,6 +44,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
+const open = ref(false)
+
 function handleValueChange(value: unknown) {
   if (typeof value === 'string')
     emit('update:modelValue', value)
@@ -51,12 +54,14 @@ function handleValueChange(value: unknown) {
 
 <template>
   <SelectRoot
+    v-model:open="open"
     :model-value="modelValue || undefined"
     :disabled="disabled"
     @update:model-value="handleValueChange"
   >
     <SelectTrigger
       :aria-label="ariaLabel"
+      @click="open = true"
       :class="cn(
         'inline-flex h-9 min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-background/70 px-3 text-sm text-foreground shadow-xs outline-none transition-colors hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30',
         props.class,

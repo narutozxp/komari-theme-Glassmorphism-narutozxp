@@ -1,4 +1,5 @@
 import dayjs from 'dayjs'
+import { getCurrencyDisplaySymbol } from '@/utils/currency'
 
 /** 计费周期类型 */
 export type BillingCycleType = 'monthly' | 'quarterly' | 'semi_annual' | 'annual' | 'biennial' | 'triennial' | 'quinquennial' | 'once' | 'custom'
@@ -343,21 +344,21 @@ export function isFreeNode(node: { price: number, tags?: string }): boolean {
 /**
  * 格式化价格显示
  * @param price 价格
- * @param currency 货币符号
+ * @param currency 货币代码或符号
  * @param lang 语言
  * @returns 价格显示文本
  */
 export function formatPrice(price: number, currency: string = '￥', lang: 'zh-CN' | 'en-US' = 'zh-CN'): string {
   if (price === 0 || isFreePrice(price))
     return lang === 'zh-CN' ? '免费' : 'Free'
-  return `${currency}${price}`
+  return `${getCurrencyDisplaySymbol(currency)}${price}`
 }
 
 /**
  * 格式化价格和计费周期
  * @param price 价格
  * @param billingCycle 计费周期（天）
- * @param currency 货币符号
+ * @param currency 货币代码或符号
  * @param lang 语言
  * @returns 完整的价格显示文本
  */
@@ -413,13 +414,13 @@ export function getRemainingValue(
 /**
  * 格式化金额（用于剩余价值显示），自动去除多余的小数 0
  * @param value 金额
- * @param currency 货币符号
+ * @param currency 货币代码或符号
  * @returns 金额显示文本，如 "$29.79"、"$0"
  */
 export function formatCurrencyValue(value: number, currency: string = '￥'): string {
   const rounded = Math.round(value * 100) / 100
   const text = rounded.toFixed(2).replace(TRAILING_ZERO_REGEX, '')
-  return `${currency}${text || '0'}`
+  return `${getCurrencyDisplaySymbol(currency)}${text || '0'}`
 }
 
 /**

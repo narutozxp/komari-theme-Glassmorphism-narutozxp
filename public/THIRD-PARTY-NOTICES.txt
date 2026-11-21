@@ -1,6 +1,13 @@
 Fork contributions incorporated into Komari Glassmorphism
 
 Source projects (MIT):
+- sanrokamlan-prog / komari-theme-Glassmorphism
+  https://github.com/sanrokamlan-prog/komari-theme-Glassmorphism
+  Base theme and server display and Ping configuration.
+- TonyStarkJr2021 / komari-theme-Gloria-Universe
+  https://github.com/TonyStarkJr2021/komari-theme-Gloria-Universe
+  Snapshot: 4faf1430023af56802d7acaa64214c6029f1a980
+  Default light and dark abstract backgrounds, adapted world map, palette and node controls.
 - towersip / komari-theme-Glassmorphism
   https://github.com/towersip/komari-theme-Glassmorphism
   Snapshot: a41270e460ee003e33f25091e8f3b3a950675662
@@ -31,6 +38,10 @@ Source projects (MIT):
   https://github.com/zfloong/komari-theme-Glassmorphism
   Snapshot: d6ccddbd4b619f83bdac2520bd22a3bf97f58100
   Retention-aware 7/15/30-day Ping presets.
+
+Map geometry: Made with Natural Earth (1:110m Admin 0 Countries, public domain).
+https://www.naturalearthdata.com/about/terms-of-use/
+The SVG paths use a 1000 × 500 equirectangular projection from 84°N to 60°S.
 
 All source licenses carry the following copyright and permission notice,
 which is retained verbatim below. Source modifications and attribution details
