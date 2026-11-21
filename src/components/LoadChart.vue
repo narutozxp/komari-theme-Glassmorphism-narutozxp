@@ -1570,10 +1570,10 @@ onMounted(() => {
     <!-- 时间选择器 -->
     <div class="flex flex-col items-center gap-2">
       <Tabs v-model="selectedView" class="w-full items-center">
-        <TabsList class="h-8 bg-background/50 backdrop-blur-xl pointer-events-auto rounded-md" data-load-chart-range>
+        <TabsList class="glass-control-surface h-8 rounded-md pointer-events-auto" data-load-chart-range>
           <TabsTrigger
             v-for="view in availableViews" :key="view.label" :value="view.label"
-            class="h-6.5 text-xs border-none data-[state=active]:text-green-600 shadow-none rounded-sm"
+            class="glass-control-button h-6.5 rounded-sm border-none text-xs shadow-none"
           >
             {{ view.label }}
           </TabsTrigger>

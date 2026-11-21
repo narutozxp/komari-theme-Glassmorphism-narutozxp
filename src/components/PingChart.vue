@@ -771,10 +771,10 @@ onBeforeUnmount(() => {
     <div class="flex flex-col gap-2">
       <Tabs v-model="selectedView" class="w-full items-center">
         <div class="min-w-0 flex-1 overflow-x-auto rounded-sm pointer-events-auto">
-          <TabsList class="w-max h-8 bg-background/50 backdrop-blur-xl rounded-md">
+          <TabsList class="glass-control-surface h-8 w-max rounded-md">
             <TabsTrigger
               v-for="view in availableViews" :key="view.label" :value="view.label"
-              class="h-6.5 flex-none shrink-0 text-xs border-none data-[state=active]:text-green-600 shadow-none rounded-sm"
+              class="glass-control-button h-6.5 flex-none shrink-0 rounded-sm border-none text-xs shadow-none"
             >
               {{ view.label }}
             </TabsTrigger>
@@ -783,15 +783,15 @@ onBeforeUnmount(() => {
         <div class="md:flex-1" />
         <div class="flex gap-2 items-center">
           <Button
-            variant="ghost" size="xs" class="h-7 rounded-sm bg-background/50 hover:bg-background border-none"
-            :class="selectedTaskIds.length === tasks.length ? 'shadow-[0_0_0_2px] shadow-green-600/10 text-green-600' : ''"
+            variant="outline" size="xs" class="glass-control-surface glass-control-button h-7 rounded-sm shadow-none"
+            :aria-pressed="tasks.length > 0 && selectedTaskIds.length === tasks.length"
             @click="showAllTasks"
           >
             全选
           </Button>
           <Button
-            variant="ghost" size="xs" class="h-7 rounded-sm bg-background/50 hover:bg-background border-none"
-            :class="!selectedTaskIds.length && 'shadow-[0_0_0_2px] shadow-green-600/10 text-green-600'"
+            variant="outline" size="xs" class="glass-control-surface glass-control-button h-7 rounded-sm shadow-none"
+            :aria-pressed="!selectedTaskIds.length"
             @click="hideAllTasks"
           >
             全不选

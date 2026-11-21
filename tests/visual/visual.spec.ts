@@ -166,7 +166,7 @@ test('paid node prices show currency symbols in cards, lists, finance, and detai
   const nodeRow = financeDialog.getByRole('row').filter({ has: page.getByRole('cell', { name: nodeName, exact: true }) })
   await expect(nodeRow.getByText('$9.9 / 年', { exact: true })).toBeVisible()
   const currencySelect = financeDialog.getByRole('combobox', { name: '显示币种', exact: true })
-  await currencySelect.press('ArrowDown')
+  await currencySelect.click()
   await page.getByRole('option', { name: '$ 美元', exact: true }).click()
   await expect(currencySelect).toHaveText('$ 美元')
 

@@ -60,6 +60,7 @@ const nodeItemStaggerMs = UI_CONFIG.motion.staggerMs
 const nodeItemStaggerLimit = UI_CONFIG.motion.staggerLimit
 const denseNodeAppearThreshold = UI_CONFIG.motion.denseNodeAppearThreshold
 const denseNodePingAnimationThreshold = UI_CONFIG.motion.denseNodePingAnimationThreshold
+const toolbarButtonClass = 'glass-control-surface glass-control-button size-9 shrink-0 rounded-md text-muted-foreground shadow-none'
 
 const appStore = useAppStore()
 const nodesStore = useNodesStore()
@@ -448,10 +449,10 @@ const nodeCardGridClass = computed(() => {
           <div class="home-controls flex flex-col gap-2.5 pointer-events-auto">
             <div class="flex min-w-0 flex-col gap-2 md:flex-row">
               <div class="max-w-full overflow-x-auto overscroll-x-contain rounded-lg md:max-w-[45%]">
-                <TabsList class="home-control-surface h-auto w-max min-w-full rounded-lg p-1" aria-label="服务器分组">
+                <TabsList class="glass-control-surface h-auto w-max min-w-full rounded-lg p-1" aria-label="服务器分组">
                   <TabsTrigger
                     v-for="g in groups" :key="g.name" :value="g.name"
-                    class="home-control-button h-8 flex-none shrink-0 rounded-md px-3 text-sm shadow-none"
+                    class="glass-control-button h-8 flex-none shrink-0 rounded-md px-3 text-sm shadow-none"
                     @click="g.name === 'all' && resetNodeControls()"
                     @keydown.enter="g.name === 'all' && resetNodeControls()"
                     @keydown.space="g.name === 'all' && resetNodeControls()"
@@ -464,14 +465,14 @@ const nodeCardGridClass = computed(() => {
 
               <div
                 v-if="showQuickControls && activeHomeTool === 'nodes'"
-                class="home-control-surface flex min-w-0 flex-1 flex-wrap items-center gap-1 rounded-lg p-1"
+                class="glass-control-surface flex min-w-0 flex-1 flex-wrap items-center gap-1 rounded-lg p-1"
                 role="group"
                 aria-label="快捷筛选和排序"
               >
                 <button
                   v-for="control in quickControls" :key="control.key"
                   type="button"
-                  class="home-control-button inline-flex h-8 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                  class="glass-control-button inline-flex h-8 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                   :aria-pressed="activeQuickControl === control.key"
                   :aria-label="`${control.label}，${quickControlCounts[control.key] ?? 0} 台节点`"
                   @click="setQuickControl(control.key)"
@@ -483,41 +484,43 @@ const nodeCardGridClass = computed(() => {
               </div>
             </div>
             <div class="search flex min-w-0 flex-wrap items-center gap-2">
-              <div v-if="homeTools.length && appStore.homeAdvancedToolsVisible" class="home-control-surface flex min-h-9 items-center gap-0.5 rounded-md p-px" role="group" aria-label="首页工具">
+              <div class="flex shrink-0 items-center gap-1" role="group" aria-label="节点视图">
+                <Button
+                  variant="outline" size="icon" aria-label="卡片视图"
+                  :class="toolbarButtonClass"
+                  :aria-pressed="appStore.nodeViewMode === 'card'"
+                  @click="setNodeViewMode('card')"
+                >
+                  <Icon icon="tabler:layout-grid" :width="16" :height="16" />
+                </Button>
+                <Button
+                  variant="outline" size="icon" aria-label="列表视图"
+                  :class="toolbarButtonClass"
+                  :aria-pressed="appStore.nodeViewMode === 'list'"
+                  @click="setNodeViewMode('list')"
+                >
+                  <Icon icon="tabler:table" :width="16" :height="16" />
+                </Button>
+              </div>
+              <div v-if="homeTools.length && appStore.homeAdvancedToolsVisible" class="flex max-w-full flex-wrap items-center gap-1" role="group" aria-label="首页工具">
                 <Button
                   v-for="tool in homeTools" :key="tool.key"
-                  variant="ghost" size="icon-xs"
-                  class="home-control-button size-7 rounded-sm text-muted-foreground shadow-none"
+                  variant="outline" size="icon"
+                  :class="toolbarButtonClass"
                   :aria-label="`${tool.label}：${tool.description}`"
                   :aria-pressed="activeHomeTool === tool.key"
                   :title="tool.description"
                   @click="toggleHomeTool(tool.key)"
                 >
-                  <Icon :icon="tool.icon" :width="14" :height="14" />
+                  <Icon :icon="tool.icon" :width="16" :height="16" />
                 </Button>
               </div>
 
-              <Button
-                variant="outline" size="icon" aria-label="卡片视图"
-                class="home-control-surface home-control-button size-9 rounded-md shadow-none"
-                :aria-pressed="appStore.nodeViewMode === 'card'"
-                @click="setNodeViewMode('card')"
-              >
-                <Icon icon="tabler:layout-grid" :width="14" :height="14" />
-              </Button>
-              <Button
-                variant="outline" size="icon" aria-label="列表视图"
-                class="home-control-surface home-control-button size-9 rounded-md shadow-none"
-                :aria-pressed="appStore.nodeViewMode === 'list'"
-                @click="setNodeViewMode('list')"
-              >
-                <Icon icon="tabler:table" :width="14" :height="14" />
-              </Button>
               <div class="relative min-w-0 flex-1 basis-44 sm:ml-auto sm:max-w-72">
                 <Input
                   v-model="searchText" placeholder="搜索名称、地区、IP、CPU"
                   aria-label="搜索节点"
-                  class="home-control-surface h-9 w-full rounded-lg pl-8 pr-9 shadow-none"
+                  class="glass-control-surface h-9 w-full rounded-lg pl-8 pr-9 shadow-none"
                   @keydown.esc.prevent="clearSearch"
                 />
                 <Icon
@@ -617,23 +620,6 @@ const nodeCardGridClass = computed(() => {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.home-control-surface {
-  border: 1px solid var(--glass-light-border);
-  background: var(--glass-light-control);
-}
-
-.dark .home-control-surface {
-  border-color: var(--glass-dark-border);
-  background: var(--glass-dark-control);
-}
-
-.home-control-button[data-state='active'],
-.home-control-button[aria-pressed='true'] {
-  background: var(--secondary) !important;
-  color: var(--selection) !important;
-  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .home-control-count {

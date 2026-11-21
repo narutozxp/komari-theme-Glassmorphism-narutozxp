@@ -14,7 +14,7 @@ GitHub Actions 会打包主题并发布到 GitHub Releases。发布成功后，�
    git push -u origin main
    ```
 
-3. 在 GitHub 的 **Actions** 页确认 **Release On Version Bump** 运行成功。如果 Actions 尚未启用，启用后在该工作流点 **Run workflow**，选择 `main`。第一次发布的版本为 `v3.4.5`，工作流会创建标签并上传安装包。
+3. 在 GitHub 的 **Actions** 页确认 **Release On Version Bump** 运行成功。如果 Actions 尚未启用，启用后在该工作流点 **Run workflow**，选择 `main`。工作流会读取主题清单中的版本号，创建标签并上传安装包。
 4. 在 GitHub 的 **Releases** 页确认最新正式版本下有一个 `komari-theme-Glassmorphism-build-*.zip` 附件。这个附件的根目录包含 `komari-theme.json`、`preview.png` 和 `dist/`。GitHub 自动列出的 **Source code (zip)** 只用于查看源码。
 
 发布包内的 `url` 由工作流写入，指向实际运行发布的仓库，供 Komari 后续更新使用。仓库地址导入会读取最新正式 Release 的首个附件，因此这个 Release 只上传一个主题 ZIP。

@@ -61,11 +61,11 @@ function handleValueChange(value: unknown) {
   >
     <SelectTrigger
       :aria-label="ariaLabel"
-      @click="open = true"
       :class="cn(
         'inline-flex h-9 min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-background/70 px-3 text-sm text-foreground shadow-xs outline-none transition-colors hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30',
         props.class,
       )"
+      @click="open = true"
     >
       <SelectValue :placeholder="placeholder" class="min-w-0 truncate text-left" />
       <Icon icon="tabler:chevron-down" width="14" height="14" class="shrink-0 text-muted-foreground" />

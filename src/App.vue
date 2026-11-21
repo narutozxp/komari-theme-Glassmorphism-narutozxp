@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
@@ -15,8 +14,7 @@ import LoadingCover from './components/LoadingCover.vue'
 import Provider from './components/Provider.vue'
 
 const appStore = useAppStore()
-const route = useRoute()
-const contentWidth = computed(() => route.name === 'home' ? 'max-w-[1536px]' : 'max-w-[1280px]')
+const contentWidth = 'max-w-[1280px]'
 useVisitorPageAudit()
 
 const isReady = ref(false)

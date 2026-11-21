@@ -27,7 +27,7 @@ const glowId = useId()
 const regionBorderFallback: Readonly<Record<string, string>> = { HK: 'CN', MO: 'CN' }
 const regionCodePattern = /^[A-Z]{2}$/
 const mapWidth = 1000
-const mapHeight = 360
+const mapHeight = 305
 const mapPathTransform = `scale(1 ${mapHeight / 500})`
 
 // Use the same bounds as the map paths, scaled to the shorter viewBox.
@@ -185,7 +185,7 @@ function clearMarker() {
   isolation: isolate;
   display: grid;
   min-width: 0;
-  height: clamp(13rem, 58vw, 16.5rem);
+  height: clamp(12.75rem, 56vw, 14.5rem);
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
   border: 1px solid rgb(109 53 199 / 0.22);
@@ -244,7 +244,7 @@ function clearMarker() {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem 0.65rem;
-  padding: 0.6rem 1rem;
+  padding: 0.45rem 0.9rem;
   color: var(--map-muted);
   font-size: 0.8125rem;
 }
@@ -265,7 +265,7 @@ function clearMarker() {
 
 .star-map__status {
   justify-content: flex-end;
-  min-height: 2.5rem;
+  min-height: 2rem;
 }
 
 .star-map__status strong {

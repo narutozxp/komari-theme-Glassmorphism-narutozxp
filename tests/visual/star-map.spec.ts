@@ -92,7 +92,7 @@ for (const disablePageAnimation of [false, true]) {
   })
 }
 
-test('wide overview and controls align, with compact header actions', async ({ page }) => {
+test('wide home and detail align with consistently sized toolbar actions', async ({ page }) => {
   await page.setViewportSize({ width: 1536, height: 900 })
   await installKomariFixture(page, { loggedIn: true, groupNodeCount: true })
   await page.goto('/')
@@ -109,17 +109,38 @@ test('wide overview and controls align, with compact header actions', async ({ p
 
   const mapRect = (await map.boundingBox())!
   const memoryRect = (await memory.boundingBox())!
+  const overviewRect = (await memory.locator('..').boundingBox())!
+  const mapShapeRect = (await map.locator('.star-map__regions').boundingBox())!
   const groupsRect = (await groups.boundingBox())!
   const filtersRect = (await quickFilters.boundingBox())!
-  expect(mapRect.width).toBeGreaterThan(720)
-  expect(mapRect.height).toBeLessThan(280)
+  expect(overviewRect.width).toBeGreaterThan(mapRect.width)
+  expect(mapShapeRect.width / mapRect.width).toBeGreaterThan(0.9)
+  expect(mapRect.height).toBeLessThan(240)
   expect(groupsRect.x).toBeCloseTo(memoryRect.x, 0)
   expect(filtersRect.x + filtersRect.width).toBeCloseTo(mapRect.x + mapRect.width, 0)
   await page.getByRole('button', { name: '显示首页工具', exact: true }).click()
   const tools = page.getByRole('group', { name: '首页工具' })
   const cards = page.getByRole('button', { name: '卡片视图', exact: true })
+  const list = page.getByRole('button', { name: '列表视图', exact: true })
   await expect(tools).toBeVisible()
-  expect((await tools.boundingBox())!.height).toBeCloseTo((await cards.boundingBox())!.height, 0)
+  const cardButton = (await cards.boundingBox())!
+  const listButton = (await list.boundingBox())!
+  expect(cardButton.x + cardButton.width).toBeLessThan(listButton.x)
+  expect((await tools.boundingBox())!.x).toBeGreaterThan(listButton.x + listButton.width)
+  for (const button of await tools.getByRole('button').all()) {
+    const toolButton = (await button.boundingBox())!
+    expect(toolButton.width).toBeCloseTo(cardButton.width, 0)
+    expect(toolButton.height).toBeCloseTo(cardButton.height, 0)
+    expect(toolButton.y).toBeCloseTo(cardButton.y, 0)
+    await expect(button.locator('svg')).toHaveCSS('width', '16px')
+  }
+
+  await page.getByRole('button', { name: '查看节点 主控-洛杉矶 详情' }).click()
+  await expect(page.getByText('节点价格', { exact: true })).toBeVisible()
+  const detailHeader = page.getByRole('button', { name: '返回首页' }).locator('..')
+  const detailRect = (await detailHeader.boundingBox())!
+  expect(detailRect.x).toBeCloseTo(memoryRect.x, 0)
+  expect(detailRect.x + detailRect.width).toBeCloseTo(mapRect.x + mapRect.width, 0)
 })
 
 test('desktop visitor details can collapse independently of the IP bar', async ({ page }) => {

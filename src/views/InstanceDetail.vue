@@ -488,15 +488,16 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
 
     <template v-else>
       <!-- 顶部导航 -->
-      <div class="px-4 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 items-center sm:flex sm:flex-wrap sm:gap-4">
-        <Button variant="ghost" size="icon-sm" class="shrink-0 bg-background/50 hover:bg-background" aria-label="返回首页" @click="router.push('/')">
+      <div class="glass-control-surface mx-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl p-2 sm:flex sm:flex-wrap sm:gap-3 sm:px-3">
+        <Button variant="ghost" size="icon-sm" class="shrink-0 rounded-md text-muted-foreground" aria-label="返回首页" @click="router.push('/')">
           <Icon icon="tabler:arrow-left" :width="16" :height="16" />
         </Button>
         <div class="min-w-0 text-lg font-bold flex gap-2 items-center">
           <img :src="`/images/flags/${getRegionCode(data.region)}.svg`" :alt="getRegionAltText(data.region)" class="size-6">
           <span class="truncate">{{ data.name }}</span>
         </div>
-        <Badge :variant="data.online ? 'default' : 'destructive'" class="text-xs !rounded">
+        <Badge variant="outline" class="text-xs">
+          <span class="size-1.5 rounded-full" :class="data.online ? 'bg-success' : 'bg-destructive'" aria-hidden="true" />
           {{ data.online ? '在线' : '离线' }}
         </Badge>
         <!-- 节点自定义标签 -->
@@ -508,7 +509,7 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
             {{ tag }}
           </Badge>
         </div>
-        <div class="col-span-3 flex h-8 shrink-0 items-center justify-end gap-1 rounded-md bg-background/50 p-0.5 backdrop-blur-xs sm:ml-auto">
+        <div class="col-span-3 flex h-8 min-w-0 items-center justify-end gap-1 sm:ml-auto">
           <Button
             variant="ghost" size="icon-sm"
             class="size-7 rounded-sm shadow-none"
@@ -553,7 +554,7 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
           class="max-w-full"
           content-class="w-72 whitespace-pre-wrap break-words px-2 py-1.5 text-left leading-relaxed"
         >
-          <div class="flex max-w-full items-center gap-1.5 rounded-full bg-background/50 px-3 py-1 text-xs text-muted-foreground">
+          <div class="glass-control-surface flex max-w-full items-center gap-1.5 rounded-full px-3 py-1 text-xs text-muted-foreground">
             <Icon :icon="vpsProvider.primary.icon" :width="14" :height="14" class="shrink-0" />
             <span class="whitespace-normal break-words leading-snug">{{ vpsProvider.displayName }}</span>
           </div>
@@ -562,16 +563,16 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
 
       <div v-if="appStore.nodeDetailSectionTabsEnabled" class="px-4 overflow-x-auto">
         <Tabs v-model="activeDetailSection" class="w-full">
-          <TabsList class="w-max h-8 bg-background/50 backdrop-blur-xl rounded-md">
-            <TabsTrigger value="overview" class="h-6.5 flex-none shrink-0 gap-1 text-xs border-none data-[state=active]:text-selection shadow-none rounded-sm">
+          <TabsList class="glass-control-surface h-8 w-max rounded-md">
+            <TabsTrigger value="overview" class="glass-control-button h-6.5 flex-none shrink-0 gap-1 rounded-sm border-none text-xs shadow-none">
               <Icon icon="tabler:layout-dashboard" :width="12" :height="12" />
               概览
             </TabsTrigger>
-            <TabsTrigger value="load" class="h-6.5 flex-none shrink-0 gap-1 text-xs border-none data-[state=active]:text-selection shadow-none rounded-sm">
+            <TabsTrigger value="load" class="glass-control-button h-6.5 flex-none shrink-0 gap-1 rounded-sm border-none text-xs shadow-none">
               <Icon icon="tabler:activity" :width="12" :height="12" />
               负载
             </TabsTrigger>
-            <TabsTrigger value="ping" class="h-6.5 flex-none shrink-0 gap-1 text-xs border-none data-[state=active]:text-selection shadow-none rounded-sm">
+            <TabsTrigger value="ping" class="glass-control-button h-6.5 flex-none shrink-0 gap-1 rounded-sm border-none text-xs shadow-none">
               <Icon icon="tabler:timeline" :width="12" :height="12" />
               延迟
             </TabsTrigger>
@@ -583,13 +584,13 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
       <div v-if="!appStore.nodeDetailSectionTabsEnabled || activeDetailSection === 'overview'" class="px-4 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
         <CardX
           v-for="item in metricCards" :key="item.key" hoverable size="small"
-          class="group h-full bg-background/50 border-none hover:bg-background transition-all rounded-md"
+          class="group h-full rounded-xl transition-colors"
           content-class="h-full !p-3"
         >
-          <div :title="item.tooltip" class="flex h-full min-h-10 md:min-h-18 flex-col justify-between gap-3">
+          <div :title="item.tooltip" class="flex h-full min-h-12 flex-col justify-between gap-3 md:min-h-16">
             <div class="flex items-center justify-between gap-2">
               <span class="text-xs font-medium tracking-wider text-muted-foreground">{{ item.label }}</span>
-              <Icon :icon="item.icon" :width="20" :height="20" class="text-slate-500/25 transition-colors group-hover:text-slate-500" />
+              <Icon :icon="item.icon" :width="20" :height="20" class="shrink-0 text-primary/65 transition-colors group-hover:text-primary" />
             </div>
             <div class="min-w-0 space-y-1">
               <div class="flex min-w-0 items-baseline gap-1 truncate font-semibold leading-none" :class="item.valueClass">
@@ -605,11 +606,11 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
       <div v-if="!appStore.nodeDetailSectionTabsEnabled || activeDetailSection === 'overview'" class="px-4 gap-4 grid grid-cols-1 lg:grid-cols-2">
         <CardX
           title="硬件信息" size="small" content-class="flex-1"
-          class="group h-full bg-background/50 border-none hover:bg-background transition-all rounded-md"
+          class="h-full rounded-xl"
         >
           <div class="flex flex-col gap-3 h-full">
             <!-- CPU 信息（跨全宽） -->
-            <div class="min-w-0 flex flex-col gap-2 rounded-sm bg-slate-500/5 p-2">
+            <div class="detail-inset min-w-0 flex flex-col gap-2 rounded-md p-2">
               <div class="flex items-center justify-between gap-2 text-muted-foreground">
                 <div class="flex min-w-0 items-center gap-1">
                   <Icon icon="icon-park-outline:cpu" :width="14" :height="14" />
@@ -649,7 +650,7 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
             <div class="grid gap-3 flex-1 auto-rows-fr" :class="hardwareSmallItems.length <= 2 ? 'grid-cols-2' : 'grid-cols-3'">
               <div
                 v-for="item in hardwareSmallItems" :key="item.label"
-                class="min-w-0 flex flex-col gap-1 rounded-sm bg-slate-500/5 p-2"
+                class="detail-inset min-w-0 flex flex-col gap-1 rounded-md p-2"
               >
                 <div class="flex gap-1 items-center text-muted-foreground">
                   <Icon v-if="item.icon" :icon="item.icon" :width="14" :height="14" />
@@ -663,12 +664,12 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
 
         <CardX
           title="系统信息" size="small" content-class="flex-1"
-          class="group h-full bg-background/50 border-none hover:bg-background transition-all rounded-md"
+          class="h-full rounded-xl"
         >
           <div class="gap-3 grid grid-cols-1 sm:grid-cols-2 h-full sm:auto-rows-fr">
             <div
               v-for="item in systemInfo" :key="item.label"
-              class="min-w-0 flex flex-col gap-1 rounded-sm bg-slate-500/5 p-2"
+              class="detail-inset min-w-0 flex flex-col gap-1 rounded-md p-2"
             >
               <div class="flex gap-1 items-center text-muted-foreground">
                 <Icon v-if="item.icon" :icon="item.icon" :width="14" :height="14" />
@@ -684,12 +685,12 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
 
         <CardX
           title="存储信息" size="small"
-          class="group h-full bg-background/50 border-none hover:bg-background transition-all rounded-md"
+          class="h-full rounded-xl"
         >
           <div class="gap-3 grid grid-cols-3">
             <div
               v-for="item in storageInfo" :key="item.label"
-              class="min-w-0 flex flex-col gap-1 rounded-sm bg-slate-500/5 p-2"
+              class="detail-inset min-w-0 flex flex-col gap-1 rounded-md p-2"
             >
               <div class="flex gap-1 items-center text-muted-foreground">
                 <Icon v-if="item.icon" :icon="item.icon" :width="14" :height="14" />
@@ -702,11 +703,11 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
 
         <CardX
           title="网络信息" size="small"
-          class="group h-full bg-background/50 border-none hover:bg-background transition-all rounded-md"
+          class="h-full rounded-xl"
           content-class="pt-0"
         >
           <div class="gap-3 grid grid-cols-2">
-            <div class="relative min-w-0 overflow-hidden rounded-sm bg-slate-500/5 p-2">
+            <div class="detail-inset relative min-w-0 overflow-hidden rounded-md p-2">
               <div
                 v-if="hasTrafficLimit"
                 class="absolute inset-y-0 left-0 rounded-sm pointer-events-none transition-[width,background-color] duration-300 ease-out"
@@ -740,7 +741,7 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
                 </span>
               </div>
             </div>
-            <div class="min-w-0 flex flex-col gap-1 rounded-sm bg-slate-500/5 p-2">
+            <div class="detail-inset min-w-0 flex flex-col gap-1 rounded-md p-2">
               <div class="flex gap-1 items-center text-muted-foreground">
                 <Icon icon="icon-park-outline:dashboard-one" :width="14" :height="14" />
                 <span class="text-xs sm:text-sm">网络速率</span>
@@ -762,3 +763,15 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
     </template>
   </div>
 </template>
+
+<style scoped>
+.detail-inset {
+  background-color: var(--glass-light-control);
+  background-color: color-mix(in srgb, var(--glass-light-control) 55%, transparent);
+}
+
+.dark .detail-inset {
+  background-color: var(--glass-dark-control);
+  background-color: color-mix(in srgb, var(--glass-dark-control) 50%, transparent);
+}
+</style>

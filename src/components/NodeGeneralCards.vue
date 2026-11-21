@@ -725,7 +725,7 @@ const wrapperClass = computed(() => {
     return 'p-4 grid grid-cols-1 gap-2 h-auto'
 
   if (isStarMap.value)
-    return 'p-4 grid grid-cols-12 gap-3 items-start md:items-stretch'
+    return 'p-4 grid grid-cols-1 gap-3 items-start lg:grid-cols-[minmax(0,11fr)_minmax(0,9fr)] lg:items-stretch'
 
   if (isTiledEarth.value)
     return 'p-3 sm:p-4 grid grid-cols-12 gap-2 sm:gap-3 h-auto min-h-[40rem] sm:min-h-[30rem] md:min-h-[36rem] lg:min-h-[40rem]'
@@ -737,8 +737,8 @@ const wrapperClass = computed(() => {
 const earthClass = computed(() => {
   if (isStarMap.value) {
     return visibleCards.value.length > 0
-      ? 'col-span-12 row-start-1 md:col-span-6 md:col-start-7'
-      : 'col-span-12'
+      ? 'row-start-1 lg:col-start-2'
+      : 'col-span-full'
   }
 
   if (isTiledEarth.value)
@@ -751,7 +751,7 @@ const cardGridClass = computed(() => {
     return 'col-span-1 grid grid-cols-3 md:grid-cols-6 gap-2'
 
   if (isStarMap.value)
-    return 'col-span-12 row-start-2 grid grid-cols-2 sm:grid-cols-3 auto-rows-fr gap-2 md:col-span-6 md:col-start-1 md:row-start-1'
+    return 'row-start-2 grid grid-cols-2 sm:grid-cols-3 auto-rows-[minmax(4.5rem,1fr)] gap-2 lg:col-start-1 lg:row-start-1'
 
   if (isTiledEarth.value)
     return 'col-span-12 row-start-1 z-9 grid grid-cols-12 auto-rows-[4.75rem] sm:auto-rows-[5rem] md:auto-rows-[5.8rem] gap-2 sm:gap-3'
