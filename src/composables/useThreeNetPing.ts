@@ -1,70 +1,47 @@
 import type { MaybeRefOrGetter } from 'vue'
 import type { useNodePingStats } from '@/composables/useNodePingStats'
 import type { NodeData } from '@/stores/nodes'
-import type { PingTaskInfo } from '@/utils/rpc'
-import { computed, onScopeDispose, shallowRef, toValue, watch } from 'vue'
-import { loadPublicPingTasks } from '@/services/metrics.service'
+import { computed, toValue, watch } from 'vue'
+import { loadPublicPingTasks, publicPingTaskCatalog } from '@/services/metrics.service'
 import { subscribeVisibleRefresh } from '@/services/visibleRefresh.service'
 import { useAppStore } from '@/stores/app'
-import { getPingTaskDisplayName } from '@/utils/threeNetSettings'
+import { getAvailablePingTaskIds, getConfiguredPingTaskIds, groupPingDisplayTasks } from '@/utils/threeNetSettings'
 
 // Adapted from towersip: explicit IDs, per-node bindings, and separate history
 // computations from status metadata so polling does not rebuild SVG paths.
 export function useThreeNetPing(node: MaybeRefOrGetter<NodeData>, stats: ReturnType<typeof useNodePingStats>, enabled: MaybeRefOrGetter<boolean>) {
   const app = useAppStore()
-  const tasks = shallowRef<PingTaskInfo[]>([])
-  let release: (() => void) | undefined
-  let generation = 0
-  watch(() => app.threeNetPingEnabled && toValue(enabled), async (enabled) => {
-    const current = ++generation
-    release?.()
-    release = undefined
+  const configuredIds = computed(() => getConfiguredPingTaskIds(toValue(node).uuid, app.threeNetPingNodeTaskBindings, app.threeNetPingTaskIds))
+  const hasConfiguredTasks = computed(() => configuredIds.value.length > 0)
+  watch(() => hasConfiguredTasks.value && toValue(enabled), (enabled, _, onCleanup) => {
     if (!enabled)
       return
-    const refresh = async () => {
-      try {
-        const result = await loadPublicPingTasks()
-        if (current === generation)
-          tasks.value = result
-      }
-      catch { /* Cached history/live status remain usable without a catalog. */ }
+    const refresh = () => {
+      void loadPublicPingTasks().catch(() => { /* Cached tasks and history remain usable. */ })
     }
-    release = subscribeVisibleRefresh(() => {
-      void refresh()
-    })
-    await refresh()
+    onCleanup(subscribeVisibleRefresh(refresh))
+    refresh()
   }, { immediate: true })
-  onScopeDispose(() => {
-    generation++
-    release?.()
+  const groups = computed(() => {
+    const current = toValue(node)
+    const ids = getAvailablePingTaskIds(configuredIds.value, publicPingTaskCatalog.value, current.uuid)
+    const tasks = ids.map(id => ({
+      id,
+      name: publicPingTaskCatalog.value?.get(id)?.name?.trim() || current.ping?.[String(id)]?.name?.trim() || `任务 ${id}`,
+    }))
+    return groupPingDisplayTasks(tasks, app.threeNetPingEnabled ? app.threeNetPingLabelMode : 'summary')
   })
-  const taskIds = computed(() => {
-    if (!app.threeNetPingEnabled)
-      return []
-    const uuid = toValue(node).uuid
-    const configured = app.threeNetPingNodeTaskBindings[uuid]
-    if (configured?.length)
-      return configured
-    if (app.threeNetPingTaskIds.length)
-      return app.threeNetPingTaskIds
-    return []
-  })
-  const historyItems = computed(() => taskIds.value.map((id) => {
-    const value = stats.taskStats(id)
-    return { id, stats: value, values: value.history.map(point => point.latency) }
-  }))
-  const items = computed(() => historyItems.value.map((item) => {
-    const sample = toValue(node).ping?.[String(item.id)]
-    const name = sample?.name?.trim() || tasks.value.find(task => task.id === item.id)?.name?.trim() || `任务 ${item.id}`
+  const items = computed(() => groups.value.map((group) => {
+    const value = stats.statsForTasks(group.taskIds)
     // Use the same one-hour window as the sparkline. A recovered latest sample
     // must not hide packet loss recorded earlier in that window.
-    const loss = item.stats.hasData ? item.stats.avgLoss : null
+    const loss = value.avgLoss
     const failed = loss !== null && loss >= 100
-    const latency = item.stats.hasData ? failed ? -1 : item.stats.avgLatency : null
+    const latency = failed ? -1 : value.avgLatency
     return {
-      ...item,
-      name,
-      label: getPingTaskDisplayName(name, app.threeNetPingLabelMode),
+      ...group,
+      stats: value,
+      values: value.history.map(point => point.latency),
       latencyValue: latency,
       lossValue: loss,
       latency: latency === null ? '—' : latency < 0 ? '不可达' : `${Math.round(latency)} ms`,
@@ -72,5 +49,5 @@ export function useThreeNetPing(node: MaybeRefOrGetter<NodeData>, stats: ReturnT
       failed,
     }
   }))
-  return { items }
+  return { items, hasConfiguredTasks }
 }

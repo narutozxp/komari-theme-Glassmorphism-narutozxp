@@ -1,10 +1,45 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
-import type { VisualFixtureOptions } from '../tests/visual/fixtures/komari'
+import type { FixturePingTask, FixtureRegion, VisualFixtureOptions } from '../tests/visual/fixtures/komari'
 import { createKomariFixture, FIXED_NOW, fixtureVisitor } from '../tests/visual/fixtures/komari'
 
 const themeSettingsPath = '/api/admin/theme/settings'
 const isoTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/
+
+const extraRegions: FixtureRegion[] = [
+  { code: 'CN', name: '上海-骨干节点', cpu: 'AMD EPYC 9654' },
+  { code: 'KR', name: '首尔-亚太边缘', cpu: 'AMD EPYC 7443P' },
+  { code: 'IN', name: '孟买-南亚节点', cpu: 'Intel Xeon Gold 6338' },
+  { code: 'MY', name: '吉隆坡-东南亚中继', cpu: 'AMD EPYC 7313P' },
+  { code: 'CA', name: '多伦多-北美备份', cpu: 'Intel Xeon Silver 4314' },
+  { code: 'BR', name: '圣保罗-南美节点', cpu: 'AMD EPYC 7453' },
+  { code: 'ZA', name: '约翰内斯堡-非洲节点', cpu: 'Intel Xeon Gold 6230' },
+  { code: 'AE', name: '迪拜-中东中继', cpu: 'AMD EPYC 7543P' },
+  { code: 'FR', name: '马赛-地中海中继', cpu: 'Intel Xeon Gold 6426Y' },
+  { code: 'NL', name: '阿姆斯特丹-欧洲交换', cpu: 'AMD EPYC 9454P' },
+]
+
+function demoNodeId(number: number): string {
+  return `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
+}
+
+const demoNetworks: Array<Pick<FixturePingTask, 'id' | 'name' | 'type' | 'demoLatency' | 'dropEvery' | 'clients'>> = [
+  { id: 20, name: '浙江电信 IPv4', type: 'icmp', demoLatency: 64 },
+  { id: 21, name: '广东电信 IPv6', type: 'icmp', demoLatency: 96, dropEvery: 23 },
+  { id: 22, name: '四川电信 TCP', type: 'tcp', demoLatency: 124, dropEvery: 13, clients: [demoNodeId(1), demoNodeId(3), demoNodeId(13)] },
+  { id: 10, name: '江苏联通 IPv4', type: 'icmp', demoLatency: 73, dropEvery: 37 },
+  { id: 11, name: '北京联通 TCP', type: 'tcp', demoLatency: 111, dropEvery: 18 },
+  { id: 12, name: '山东联通 IPv6', type: 'icmp', demoLatency: 87 },
+  { id: 30, name: '上海移动 IPv4', type: 'icmp', demoLatency: 58 },
+  { id: 31, name: '广东移动 IPv6', type: 'icmp', demoLatency: 83, dropEvery: 28 },
+  { id: 32, name: '湖北移动 HTTP', type: 'http', demoLatency: 146, dropEvery: 9 },
+  { id: 40, name: '东京 NTT', type: 'icmp', demoLatency: 44 },
+  { id: 41, name: '新加坡 Singtel', type: 'tcp', demoLatency: 67, dropEvery: 47 },
+  { id: 42, name: '北京教育网 IPv6', type: 'icmp', demoLatency: 79 },
+  { id: 43, name: '法兰克福 DE-CIX', type: 'tcp', demoLatency: 185 },
+  { id: 44, name: '多伦多 Bell', type: 'icmp', demoLatency: 156, clients: [demoNodeId(1), demoNodeId(17)] },
+  { id: 45, name: '圣保罗 IX.br', type: 'http', demoLatency: 221, dropEvery: 11, clients: [demoNodeId(17), demoNodeId(18)] },
+]
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -36,9 +71,11 @@ export function komariDemo(): Plugin {
     dark: true,
     loggedIn: true,
     threeNetPing: true,
-    pingTaskOrdering: true,
     groupNodeCount: true,
-    threeNetNodeBindings: '{"00000000-0000-4000-8000-000000000001":[20,30]}',
+    extraRegions,
+    pingTasks: demoNetworks.map((task, weight) => ({ ...task, interval: 75, weight, loss: 0 })),
+    threeNetTaskIds: JSON.stringify([20, 21, 10, 11, 30, 31, 40, 41, 42, 43]),
+    threeNetNodeBindings: JSON.stringify({ [demoNodeId(1)]: [20, 22, 10, 30, 32, 40, 44] }),
     themeSettingsOverrides: { visitorInfoEnabled: true, stopEarth: false, disablePageAnimation: false },
   }
   const fixture = createKomariFixture(options)

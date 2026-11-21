@@ -93,6 +93,8 @@ const {
   latencyPanelTooltip,
   lossPanelTooltip,
 } = useNodePingDisplay(() => props.node.uuid, { enabled: () => props.pingEnabled })
+const showConfiguredPing = computed(() => appStore.threeNetPingEnabled || appStore.threeNetPingSparkline
+  || appStore.threeNetPingTaskIds.length > 0 || Boolean(appStore.threeNetPingNodeTaskBindings[props.node.uuid]?.length))
 
 const trafficUsedPercentage = computed(() => getTrafficUsedPercentage(props.node))
 const trafficUsed = computed(() => getTrafficUsed(props.node))
@@ -456,7 +458,7 @@ function hasFlag(): boolean {
         </div>
 
         <!-- 延迟 + 丢包 -->
-        <NodeThreeNetPing v-if="appStore.threeNetPingEnabled || appStore.threeNetPingSparkline" :node="props.node" :stats="pingStats" :enabled="props.pingEnabled" @open="emit('pingClick')" />
+        <NodeThreeNetPing v-if="showConfiguredPing" :node="props.node" :stats="pingStats" :enabled="props.pingEnabled" @open="emit('pingClick')" />
         <div v-else class="grid grid-cols-2 gap-1.5">
           <button
             type="button"

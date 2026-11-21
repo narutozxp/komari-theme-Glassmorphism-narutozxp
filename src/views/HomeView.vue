@@ -24,6 +24,7 @@ import {
   isHighLoadNode,
 } from '@/utils/nodeMetricsHelper'
 import { isNodeMatchSearch } from '@/utils/nodeSearch'
+import { getConfiguredPingTaskIds } from '@/utils/threeNetSettings'
 
 type VisibleQuickControlKey = Exclude<HomeQuickControlKey, 'monthlyCost'>
 
@@ -249,7 +250,7 @@ const isDenseNodeGrid = computed(() => appStore.nodeViewMode === 'card' && nodeL
 const enableNodeCardTransition = computed(() => !appStore.disablePageAnimation && !isDenseNodeGrid.value)
 const reduceDenseNodeEffects = computed(() => appStore.nodeViewMode === 'card' && nodeList.value.length > denseNodePingAnimationThreshold)
 const deferNodeCards = computed(() => appStore.nodeViewMode === 'card' && nodeList.value.length > UI_CONFIG.virtualList.nodeThreshold)
-const deferredNodeCardHeight = computed(() => {
+function deferredNodeCardHeight(uuid: string) {
   const sparkline = appStore.threeNetPingSparkline
   const size = appStore.nodeCardSize
   const base = sparkline
@@ -257,12 +258,13 @@ const deferredNodeCardHeight = computed(() => {
     : { mini: 220, compact: 270, comfortable: 310, large: 350 }[size]
   if (!appStore.threeNetPingEnabled)
     return base
-  const taskCount = Math.max(appStore.threeNetPingTaskIds.length, ...Object.values(appStore.threeNetPingNodeTaskBindings).map(ids => ids.length))
+  const selectedCount = getConfiguredPingTaskIds(uuid, appStore.threeNetPingNodeTaskBindings, appStore.threeNetPingTaskIds).length
+  const taskCount = appStore.threeNetPingLabelMode === 'carrier' ? Math.min(selectedCount, 3) : selectedCount
   const rowHeight = sparkline
     ? { mini: 22, compact: 24, comfortable: 26, large: 28 }[size]
     : { mini: 36, compact: 50, comfortable: 54, large: 62 }[size]
   return base + Math.max(0, taskCount - 1) * rowHeight
-})
+}
 
 const quickControlCounts = computed<Record<VisibleQuickControlKey, number>>(() => {
   let base = groupNodeList.value
@@ -567,7 +569,7 @@ const nodeCardGridClass = computed(() => {
                 <DeferredRender
                   :enabled="deferNodeCards"
                   :idle-delay="800 + index * 70"
-                  :min-height="deferredNodeCardHeight"
+                  :min-height="deferredNodeCardHeight(node.uuid)"
                 >
                   <NodeCard
                     :node="node"

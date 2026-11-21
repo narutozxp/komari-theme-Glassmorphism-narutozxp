@@ -27,6 +27,7 @@ interface PingRecord {
   task_id: number
   time: string
   value: number
+  count?: number
 }
 
 interface MetricLossPoint {
@@ -311,6 +312,7 @@ async function loadPingMetricRecords(nodeUuid: string, hours: number, maxCount?:
           task_id: taskId,
           time: point.time,
           value: point.value,
+          count: isFiniteNumber(point.count) && point.count > 0 ? point.count : 1,
         })
       }
     }
@@ -475,8 +477,9 @@ function buildPingHistory(records: PingRecord[], metricLossPoints?: MetricLossPo
       if (record.timestamp >= startTime) {
         totalCount += 1
         if (record.value >= 0) {
-          latencySum += record.value
-          latencyCount += 1
+          const count = record.count ?? 1
+          latencySum += record.value * count
+          latencyCount += count
         }
         else {
           lostCount += 1
@@ -507,6 +510,43 @@ function buildPingHistory(records: PingRecord[], metricLossPoints?: MetricLossPo
   }
 
   return history
+}
+
+function buildSelectedStats(records: PingRecord[], metricStats: PingMetricTaskStats[], lossPoints?: MetricLossPoint[]) {
+  const sampledLatencyTasks = new Set<number>()
+  const sampledLossTasks = new Set<number>()
+  const latencies: Array<{ value: number, weight: number }> = []
+  const losses: Array<{ value: number, weight: number }> = []
+
+  for (const task of metricStats) {
+    const id = normalizeTaskId(task.task_id)
+    if (task.valid > 0 && isFiniteNumber(task.avg)) {
+      sampledLatencyTasks.add(id)
+      latencies.push({ value: task.avg, weight: task.valid })
+    }
+    if (task.total > 0 && !task.loss_approximate && isFiniteNumber(task.loss)) {
+      sampledLossTasks.add(id)
+      losses.push({ value: task.loss, weight: task.total })
+    }
+  }
+
+  for (const record of records) {
+    if (record.value >= 0 && !sampledLatencyTasks.has(record.task_id))
+      latencies.push({ value: record.value, weight: record.count ?? 1 })
+    if (!lossPoints)
+      losses.push({ value: record.value < 0 ? 100 : 0, weight: 1 })
+  }
+
+  for (const point of lossPoints ?? []) {
+    if (!sampledLossTasks.has(point.taskId))
+      losses.push({ value: point.value * 100, weight: point.count })
+  }
+
+  return {
+    avgLatency: latencies.length ? weightedAverage(latencies) : null,
+    avgLoss: losses.length ? weightedAverage(losses) : null,
+    history: buildPingHistory(records, lossPoints),
+  }
 }
 
 function getPercentile(values: number[], percentile: number): number | null {
@@ -750,28 +790,16 @@ export function useNodePingStats(
 
   return {
     stats,
-    taskStats: (taskId: number): NodePingStatsState => {
+    statsForTasks: (taskIds: number[]) => {
       const { uuid: nodeUuid, hours, maxCount, enabled } = resolved.value
-      if (!enabled)
-        return createEmptyStats()
+      if (!enabled || !taskIds.length)
+        return { avgLatency: null, avgLoss: null, history: [] }
       const state = getSharedPingRecordsEntry(hours, maxCount, nodeUuid).data.value
-      const records = (state?.recordsByClient.get(nodeUuid) ?? []).filter(record => record.task_id === taskId)
-      const metricStats = state?.metricStats?.filter(stat => normalizeTaskId(stat.task_id) === taskId)
-      const lossPoints = state?.metricLossPoints?.filter(point => point.taskId === taskId)
-      if (state?.source === 'metric') {
-        // Latest status is a value, not a history point. Do not fabricate a
-        // curve when only task statistics (and no recorded series) exist.
-        const result = buildStats(records, metricStats, lossPoints)
-        return { ...result, history: buildPingHistory(records, lossPoints) }
-      }
-      const valid = records.filter(record => record.value >= 0)
-      return {
-        avgLatency: average(valid.map(record => record.value)),
-        avgLoss: records.length ? (records.length - valid.length) / records.length * 100 : 0,
-        avgVolatility: 0,
-        history: buildPingHistory(records),
-        hasData: records.length > 0,
-      }
+      const ids = new Set(taskIds)
+      const records = (state?.recordsByClient.get(nodeUuid) ?? []).filter(record => ids.has(record.task_id))
+      const metricStats = state?.metricStats?.filter(stat => ids.has(normalizeTaskId(stat.task_id))) ?? []
+      const lossPoints = state?.metricLossPoints?.filter(point => ids.has(point.taskId))
+      return buildSelectedStats(records, metricStats, lossPoints)
     },
     loading,
     error,

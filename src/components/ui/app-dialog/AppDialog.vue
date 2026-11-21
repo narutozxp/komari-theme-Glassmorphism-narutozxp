@@ -53,6 +53,9 @@ const emit = defineEmits<{
         <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
           <slot />
         </div>
+        <div v-if="$slots.footer" class="shrink-0 border-t border-border/60 px-4 py-3 sm:px-5">
+          <slot name="footer" />
+        </div>
       </DialogContent>
     </DialogPortal>
   </DialogRoot>

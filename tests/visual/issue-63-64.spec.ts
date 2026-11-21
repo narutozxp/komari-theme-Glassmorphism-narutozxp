@@ -115,7 +115,7 @@ for (const action of ['change provider', 'revoke permission'] as const) {
 
 for (const source of ['metric', 'legacy', 'empty', 'full loss'] as const) {
   test(`three-net window averages ignore recovered latest probes: ${source}`, async ({ page }) => {
-    await installKomariFixture(page, { hideEarth: true, pingTaskOrdering: true, threeNetPing: true, livePingLoss: 0 })
+    await installKomariFixture(page, { hideEarth: true, pingTaskOrdering: true, threeNetPing: true, livePingLoss: 0, themeSettingsOverrides: { threeNetPingLabelMode: 'full' } })
     await page.route('**/rpc2', async (route) => {
       const payload = route.request().postDataJSON()
       if (source !== 'metric' && payload.method === 'public:getPingMetricStats') {

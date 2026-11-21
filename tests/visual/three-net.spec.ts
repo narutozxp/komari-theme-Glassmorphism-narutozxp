@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { escapePingTooltip, pingChartTaskLabels } from '../../src/utils/pingChartPresentation'
 import { smoothPingChartDisplayRows } from '../../src/utils/pingChartSmoothing'
 import { buildSparklineGeometry } from '../../src/utils/sparklinePath'
-import { getPingTaskDisplayName, parseNodePingBindings, parsePingTaskIds } from '../../src/utils/threeNetSettings'
+import { groupPingDisplayTasks, parseNodePingBindings, parsePingTaskIds } from '../../src/utils/threeNetSettings'
 import { installKomariFixture } from './fixtures/komari'
 
 const UUID = '00000000-0000-4000-8000-000000000001'
@@ -15,11 +15,12 @@ test('curves preserve missing samples, extrema and source data', () => {
   const geometry = buildSparklineGeometry([100, 1000, null, 200])
   expect(geometry.linePaths).toHaveLength(2)
   expect(geometry.linePaths.every(path => !path.includes('NaN'))).toBe(true)
-  expect(parsePingTaskIds('20,10,20,-1,NaN,30,40')).toEqual([20, 10, 30])
+  expect(parsePingTaskIds('20,10,20,-1,NaN,30,40')).toEqual([20, 10, 30, 40])
   expect(parsePingTaskIds('[20,10,20,30]')).toEqual([20, 10, 30])
-  expect(getPingTaskDisplayName('浙江省-电信 IPv6', 'carrier')).toBe('电信')
-  expect(getPingTaskDisplayName('浙江省-电信 IPv6', 'full')).toBe('浙江省-电信 IPv6')
-  expect(getPingTaskDisplayName('东京区域延迟探测', 'carrier')).toBe('东京区域延迟探测')
+  const tasks = [{ id: 20, name: '浙江省-电信 IPv6' }, { id: 21, name: '广东 CTCC' }, { id: 40, name: '东京区域延迟探测' }]
+  expect(groupPingDisplayTasks(tasks, 'carrier').map(group => [group.label, group.taskIds])).toEqual([['电信', [20, 21]]])
+  expect(groupPingDisplayTasks(tasks, 'summary')[0]!.taskIds).toEqual([20, 21, 40])
+  expect(groupPingDisplayTasks(tasks, 'full').map(group => group.label)).toEqual(tasks.map(task => task.name))
   expect(parseNodePingBindings('invalid')).toEqual({})
   expect(parseNodePingBindings(`{"${UUID}":[30,20,10],"__proto__":[1]}`)[UUID]).toEqual([30, 20, 10])
   const labels = pingChartTaskLabels([{ id: 1, name: '同名' }, { id: 2, name: '同名' }, { id: 3, name: '同名 · #1' }])
@@ -52,7 +53,7 @@ test('history refresh pauses in background and resumes once per node', async ({ 
   })
   await installKomariFixture(page, { hideEarth: true, pingTaskOrdering: true, threeNetPing: true })
   await page.goto('/')
-  await expect(page.locator('[data-three-net-task]')).toHaveCount(36)
+  await expect(page.locator('[data-ping-summary]')).toHaveCount(36)
   await expect.poll(() => entities.length).toBe(12)
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true })
@@ -123,6 +124,7 @@ for (const mobile of [false, true]) {
       pingGaps: true,
       threeNetTaskIds: '20,10,30',
       threeNetNodeBindings: `{"${UUID}":[30,20,10]}`,
+      themeSettingsOverrides: { threeNetPingLabelMode: 'full' },
       livePingOffset: 0,
     }
     const calls: Array<{ method: string, params?: Record<string, unknown> }> = []

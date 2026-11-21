@@ -10,6 +10,10 @@ export interface ThreeNetDisplaySettings {
   threeNetPingLabelMode?: PingTaskLabelMode
 }
 
+export function loadThreeNetThemeSettings() {
+  return requestManager.run('theme-settings:three-net-read', signal => getSharedApi().getPublicSettings(signal))
+}
+
 // Adapted from towersip. Patch only edited nodes into freshly fetched settings,
 // retaining hidden nodes and settings changed elsewhere since the editor opened.
 export async function saveThreeNetPingBindings(changes: Record<string, number[]>, globalIds?: number[], display: ThreeNetDisplaySettings = {}) {

@@ -16,6 +16,24 @@ const REGION_FIXTURES = [
   { code: 'AU', name: '悉尼-IPv6', cpu: 'AMD Ryzen 9 9950X 16-Core Processor' },
 ] as const
 
+export interface FixtureRegion {
+  code: string
+  name: string
+  cpu: string
+}
+
+export interface FixturePingTask {
+  id: number
+  name: string
+  interval: number
+  weight: number
+  loss: number
+  type?: string
+  clients?: string[]
+  demoLatency?: number
+  dropEvery?: number
+}
+
 export interface VisualFixtureOptions {
   dark?: boolean
   earthRenderer?: 'starMap' | 'cobe' | 'realistic' | 'tiled'
@@ -44,19 +62,22 @@ export interface VisualFixtureOptions {
   publicNodeIps?: boolean
   nodeIpOverrides?: Record<string, { ipv4: string, ipv6: string, region: string }>
   pingRetentionHours?: number
+  extraRegions?: readonly FixtureRegion[]
+  pingTasks?: readonly FixturePingTask[]
 }
 
 function uuidFor(index: number): string {
   return `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
 }
 
-function buildClients(freePriceNode = false, expiryThresholds = false, multipleGroups = false) {
-  return Object.fromEntries(Array.from({ length: 12 }, (_, index) => {
-    const fixture = REGION_FIXTURES[index % REGION_FIXTURES.length]
+function buildClients(options: VisualFixtureOptions) {
+  const { freePriceNode, expiryThresholds, groupNodeCount: multipleGroups, extraRegions = [] } = options
+  return Object.fromEntries(Array.from({ length: 12 + extraRegions.length }, (_, index) => {
+    const fixture = extraRegions[index - 12] ?? REGION_FIXTURES[index % REGION_FIXTURES.length]!
     const uuid = uuidFor(index)
     return [uuid, {
       uuid,
-      name: index < REGION_FIXTURES.length ? fixture.name : `${fixture.name}-${index + 1}`,
+      name: index < REGION_FIXTURES.length || index >= 12 ? fixture.name : `${fixture.name}-${index + 1}`,
       cpu_name: fixture.cpu,
       virtualization: index % 3 === 0 ? 'docker' : 'kvm',
       arch: index % 4 === 0 ? 'aarch64' : 'x86_64',
@@ -94,8 +115,8 @@ function buildClients(freePriceNode = false, expiryThresholds = false, multipleG
   }))
 }
 
-function buildStatuses() {
-  return Object.fromEntries(Array.from({ length: 12 }, (_, index) => {
+function buildStatuses(count: number) {
+  return Object.fromEntries(Array.from({ length: count }, (_, index) => {
     const uuid = uuidFor(index)
     const offline = index === 5
     const highLoad = index === 2
@@ -140,10 +161,7 @@ function buildStatuses() {
   }))
 }
 
-const clients = buildClients()
-const statuses = buildStatuses()
-
-function buildRecords(uuid = uuidFor(0)) {
+function buildRecords(uuid: string, statuses: ReturnType<typeof buildStatuses>) {
   const status = statuses[uuid] ?? statuses[uuidFor(0)]
   return Array.from({ length: 48 }, (_, index) => ({
     ...status,
@@ -216,10 +234,42 @@ function metricValue(key: string, index: number): number {
   return values[key] ?? 0
 }
 
+function demoPingSample(task: FixturePingTask, uuid: string, index: number): number {
+  const node = Number(uuid.slice(-12)) || 0
+  if (task.dropEvery && (index + task.id + node) % task.dropEvery === 0)
+    return -1
+  const wave = Math.sin((index + task.id) / 4) * 8 + Math.cos(index / 7) * 4
+  return Math.max(1, Math.round((task.demoLatency ?? 80) + node % 8 * 7 + wave))
+}
+
+function summarizeDemoPing(task: FixturePingTask, uuid: string) {
+  const values = Array.from({ length: 48 }, (_, index) => demoPingSample(task, uuid, index))
+  const valid = values.filter(value => value >= 0)
+  return {
+    total: values.length,
+    valid: valid.length,
+    avg: valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : undefined,
+    min: valid.length ? Math.min(...valid) : undefined,
+    max: valid.length ? Math.max(...valid) : undefined,
+    latest: values.at(-1),
+    loss: (values.length - valid.length) / values.length * 100,
+  }
+}
+
+function pingTasksForNode(tasks: FixturePingTask[], uuid: string): FixturePingTask[] {
+  return tasks.filter(task => !task.clients || task.clients.includes(uuid))
+}
+
+function getMetricPingTasks(options: VisualFixtureOptions, tasks: FixturePingTask[], uuid: string): FixturePingTask[] {
+  if (options.pingTasks)
+    return pingTasksForNode(tasks, uuid)
+  return options.pingTaskOrdering ? [tasks[2]!, tasks[0]!, tasks[1]!] : tasks
+}
+
 function buildMetricResponse(
   payload: Record<string, unknown>,
   options: VisualFixtureOptions,
-  pingTasks: Array<{ id: number, name: string }>,
+  pingTasks: FixturePingTask[],
 ) {
   const requested = Array.isArray(payload.metric_keys) ? payload.metric_keys.map(String) : METRIC_KEYS
   const uuid = typeof payload.entity_id === 'string' ? payload.entity_id : uuidFor(0)
@@ -227,9 +277,7 @@ function buildMetricResponse(
     time: new Date(Date.parse(FIXED_NOW) - (47 - index) * 75_000).toISOString(),
     index,
   }))
-  const metricPingTasks = options.pingTaskOrdering
-    ? [pingTasks[2]!, pingTasks[0]!, pingTasks[1]!]
-    : pingTasks
+  const metricPingTasks = getMetricPingTasks(options, pingTasks, uuid)
   const series = requested
     .filter(key => !options.missingCpuMetricHistory || key !== 'cpu.usage')
     .flatMap((key) => {
@@ -239,12 +287,18 @@ function buildMetricResponse(
         entity_id: uuid,
         type: 'gauge',
         tags: task ? { task_id: String(task.id), task_name: task.name } : {},
-        points: points.map(point => ({
-          time: point.time,
-          value: options.pingGaps && key === 'ping.latency_ms' && point.index >= 18 && point.index <= 30
-            ? null
-            : key === 'ping.loss' && options.threeNetPing ? 0.015 : metricValue(key, point.index) + (task?.id ?? 0),
-        })),
+        points: points.map((point) => {
+          if (task && options.pingTasks) {
+            const sample = demoPingSample(task, uuid, point.index)
+            return { time: point.time, value: key === 'ping.loss' ? Number(sample < 0) : sample >= 0 ? sample : null, count: 1 }
+          }
+          return {
+            time: point.time,
+            value: options.pingGaps && key === 'ping.latency_ms' && point.index >= 18 && point.index <= 30
+              ? null
+              : key === 'ping.loss' && options.threeNetPing ? 0.015 : metricValue(key, point.index) + (task?.id ?? 0),
+          }
+        }),
       }))
     })
   return { start: points[0].time, end: points.at(-1)?.time, series, count: series.length }
@@ -260,28 +314,36 @@ interface FixtureRpcRequest {
   params?: Record<string, unknown>
 }
 
-function handleRpc(payload: FixtureRpcRequest, clientFixtures = clients, options: VisualFixtureOptions = {}) {
-  const uuid = typeof payload.params?.uuid === 'string' ? payload.params.uuid : uuidFor(0)
-  const pingTasks = options.pingTaskOrdering
-    ? [
-        { id: 30, name: '浙江移动', interval: 60, loss: 0, weight: 0 },
-        { id: 10, name: '浙江联通', interval: 60, loss: 0, weight: 1 },
-        { id: 20, name: '浙江电信', interval: 60, loss: 0, weight: 2 },
-      ]
-    : [{ id: 1, name: 'Tokyo', interval: 60, loss: 3.2, weight: 1 }]
-  const metricPingTasks = options.pingTaskOrdering
-    ? [pingTasks[2]!, pingTasks[0]!, pingTasks[1]!]
-    : pingTasks
+function handleRpc(payload: FixtureRpcRequest, clientFixtures: ReturnType<typeof buildClients>, statuses: ReturnType<typeof buildStatuses>, options: VisualFixtureOptions) {
+  const { uuid: clientId, entity_id: entityId } = payload.params ?? {}
+  const uuid = typeof clientId === 'string' ? clientId : options.pingTasks && typeof entityId === 'string' ? entityId : uuidFor(0)
+  const pingTasks: FixturePingTask[] = options.pingTasks
+    ? options.pingTasks.map(task => ({ ...task }))
+    : options.pingTaskOrdering
+      ? [
+          { id: 30, name: '浙江移动', interval: 60, loss: 0, weight: 0 },
+          { id: 10, name: '浙江联通', interval: 60, loss: 0, weight: 1 },
+          { id: 20, name: '浙江电信', interval: 60, loss: 0, weight: 2 },
+        ]
+      : [{ id: 1, name: 'Tokyo', interval: 60, loss: 3.2, weight: 1 }]
   if (options.duplicateTaskNames) {
     pingTasks[0]!.name = '<img src=x onerror="window.__pingInjected=1">同名'
     pingTasks[1]!.name = pingTasks[0]!.name
   }
-  const pingRecords = pingTasks.flatMap(task => Array.from({ length: 48 }, (_, index) => ({
-    task_id: task.id,
-    client: uuid,
-    time: new Date(Date.parse(FIXED_NOW) - (47 - index) * 75_000).toISOString(),
-    value: index % 17 === 0 ? -1 : 76 + index + task.id,
-  })))
+  const metricPingTasks = getMetricPingTasks(options, pingTasks, uuid)
+  function buildPingResponse() {
+    const requestedTask = Number(payload.params?.task_id)
+    const tasks = options.pingTasks
+      ? metricPingTasks.filter(task => !requestedTask || task.id === requestedTask)
+      : pingTasks
+    const records = tasks.flatMap(task => Array.from({ length: 48 }, (_, index) => ({
+      task_id: task.id,
+      client: uuid,
+      time: new Date(Date.parse(FIXED_NOW) - (47 - index) * 75_000).toISOString(),
+      value: options.pingTasks ? demoPingSample(task, uuid, index) : index % 17 === 0 ? -1 : 76 + index + task.id,
+    })))
+    return { count: options.pingTasks ? records.length : 48, records, tasks: options.pingTasks ? tasks : pingTasks }
+  }
   let result: unknown
 
   switch (payload.method) {
@@ -295,7 +357,7 @@ function handleRpc(payload: FixtureRpcRequest, clientFixtures = clients, options
       result = options.threeNetPing
         ? Object.fromEntries(Object.entries(statuses).map(([id, status]) => [id, {
             ...status,
-            ping: Object.fromEntries(pingTasks.map(task => [task.id, {
+            ping: Object.fromEntries(pingTasksForNode(pingTasks, id).map(task => [task.id, {
               name: task.name,
               latest: status.online ? 40 + task.id + (options.livePingOffset ?? 0) : -1,
               avg: 80 + task.id,
@@ -303,26 +365,29 @@ function handleRpc(payload: FixtureRpcRequest, clientFixtures = clients, options
               max: 200,
               tail: 100,
               loss: options.livePingLoss ?? (status.online ? 1.5 : 100),
+              ...(options.pingTasks
+                ? { ...summarizeDemoPing(task, id), ...(!status.online ? { latest: -1, loss: 100 } : {}) }
+                : {}),
             }])),
           }]))
         : statuses
       break
     case 'common:getNodeRecentStatus':
-      result = { count: 48, records: buildRecords(uuid) }
+      result = { count: 48, records: buildRecords(uuid, statuses) }
       break
     case 'common:getRecords':
       result = payload.params?.type === 'ping'
-        ? { count: 48, records: pingRecords, tasks: pingTasks }
-        : { count: 48, records: buildRecords(uuid) }
+        ? buildPingResponse()
+        : { count: 48, records: buildRecords(uuid, statuses) }
       break
     case 'public:getClientRecentRecords':
-      result = buildRecords(uuid)
+      result = buildRecords(uuid, statuses)
       break
     case 'public:getRecordsByUUID':
-      result = { count: 48, records: buildRecords(uuid), load_type: 'all', has_gpu_data: false }
+      result = { count: 48, records: buildRecords(uuid, statuses), load_type: 'all', has_gpu_data: false }
       break
     case 'public:getPingRecords':
-      result = { count: 48, records: pingRecords, tasks: pingTasks }
+      result = buildPingResponse()
       break
     case 'public:getPublicPingTasks':
       result = pingTasks
@@ -334,7 +399,7 @@ function handleRpc(payload: FixtureRpcRequest, clientFixtures = clients, options
       result = buildMetricResponse(payload.params ?? {}, options, pingTasks)
       break
     case 'public:getPingMetricStats':
-      result = options.pingTaskOrdering
+      result = options.pingTaskOrdering || options.pingTasks
         ? {
             start: FIXED_NOW,
             end: FIXED_NOW,
@@ -353,6 +418,7 @@ function handleRpc(payload: FixtureRpcRequest, clientFixtures = clients, options
               max: 120 + task.id,
               avg: 80 + task.id,
               latest: 90 + task.id,
+              ...(options.pingTasks ? summarizeDemoPing(task, uuid) : {}),
             })),
             count: metricPingTasks.length,
           }
@@ -377,7 +443,8 @@ function handleRpc(payload: FixtureRpcRequest, clientFixtures = clients, options
 }
 
 export function createKomariFixture(options: VisualFixtureOptions = {}) {
-  const clientFixtures = buildClients(options.freePriceNode, options.expiryThresholds, options.groupNodeCount)
+  const clientFixtures = buildClients(options)
+  const statuses = buildStatuses(Object.keys(clientFixtures).length)
   if (options.hiddenFirstNode)
     clientFixtures[uuidFor(0)]!.hidden = true
   if (options.publicNodeIps) {
@@ -447,7 +514,7 @@ export function createKomariFixture(options: VisualFixtureOptions = {}) {
     }),
     me: () => ({ logged_in: options.loggedIn ?? false, username: 'visual-guest' }),
     version: () => ({ status: 'success', message: 'ok', data: { version: '1.2.6-visual', hash: 'visual' } }),
-    rpc: (payload: FixtureRpcRequest) => handleRpc(payload, clientFixtures, options),
+    rpc: (payload: FixtureRpcRequest) => handleRpc(payload, clientFixtures, statuses, options),
   }
 }
 
