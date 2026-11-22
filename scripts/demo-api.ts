@@ -1,27 +1,11 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
-import type { FixturePingTask, FixtureRegion, VisualFixtureOptions } from '../tests/visual/fixtures/komari'
+import type { FixturePingTask, VisualFixtureOptions } from '../tests/visual/fixtures/komari'
 import { createKomariFixture, FIXED_NOW, fixtureVisitor } from '../tests/visual/fixtures/komari'
+import { demoExtraRegions, demoNodeId } from './demo-nodes'
 
 const themeSettingsPath = '/api/admin/theme/settings'
 const isoTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/
-
-const extraRegions: FixtureRegion[] = [
-  { code: 'CN', name: '上海-骨干节点', cpu: 'AMD EPYC 9654' },
-  { code: 'KR', name: '首尔-亚太边缘', cpu: 'AMD EPYC 7443P' },
-  { code: 'IN', name: '孟买-南亚节点', cpu: 'Intel Xeon Gold 6338' },
-  { code: 'MY', name: '吉隆坡-东南亚中继', cpu: 'AMD EPYC 7313P' },
-  { code: 'CA', name: '多伦多-北美备份', cpu: 'Intel Xeon Silver 4314' },
-  { code: 'BR', name: '圣保罗-南美节点', cpu: 'AMD EPYC 7453' },
-  { code: 'ZA', name: '约翰内斯堡-非洲节点', cpu: 'Intel Xeon Gold 6230' },
-  { code: 'AE', name: '迪拜-中东中继', cpu: 'AMD EPYC 7543P' },
-  { code: 'FR', name: '马赛-地中海中继', cpu: 'Intel Xeon Gold 6426Y' },
-  { code: 'NL', name: '阿姆斯特丹-欧洲交换', cpu: 'AMD EPYC 9454P' },
-]
-
-function demoNodeId(number: number): string {
-  return `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
-}
 
 const demoNetworks: Array<Pick<FixturePingTask, 'id' | 'name' | 'type' | 'demoLatency' | 'dropEvery' | 'clients'>> = [
   { id: 20, name: '浙江电信 IPv4', type: 'icmp', demoLatency: 64 },
@@ -72,7 +56,7 @@ export function komariDemo(): Plugin {
     loggedIn: true,
     threeNetPing: true,
     groupNodeCount: true,
-    extraRegions,
+    extraRegions: demoExtraRegions,
     pingTasks: demoNetworks.map((task, weight) => ({ ...task, interval: 75, weight, loss: 0 })),
     threeNetTaskIds: JSON.stringify([20, 21, 10, 11, 30, 31, 40, 41, 42, 43]),
     threeNetNodeBindings: JSON.stringify({ [demoNodeId(1)]: [20, 22, 10, 30, 32, 40, 44] }),

@@ -1,3 +1,4 @@
+import { getChinaProvinceFromRegion } from '@/utils/chinaProvince'
 import { emojiToRegionMap } from '@/utils/regionHelper'
 
 /** 国家/地区 ISO 代码 → [lat, lng] */
@@ -259,7 +260,7 @@ const ISO_CODE_REGEX = /^[A-Z]{2}$/
 
 /**
  * 从节点 region 字段提取 ISO 2 字母代码。
- * 支持：emoji 国旗、ISO 代码字符串、大小写、空白填充。
+ * 支持：emoji 国旗、国家代码、中国大陆省级代码。
  */
 export function getCountryCodeFromRegion(region: string | undefined | null): string | null {
   if (!region)
@@ -276,6 +277,8 @@ export function getCountryCodeFromRegion(region: string | undefined | null): str
   const upper = trimmed.toUpperCase()
   if (ISO_CODE_REGEX.test(upper) && upper in COORD_MAP)
     return upper
+  if (getChinaProvinceFromRegion(upper))
+    return 'CN'
 
   return null
 }

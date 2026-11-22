@@ -1,6 +1,44 @@
 import { expect, test } from '@playwright/test'
 import { installKomariFixture } from './fixtures/komari'
 
+test('quick filters and sorting place cards in their final grid slots immediately', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await installKomariFixture(page, { themeSettingsOverrides: { disablePageAnimation: false } })
+  await page.goto('/')
+  const card = page.getByRole('button', { name: '查看节点 主控-洛杉矶 详情', exact: true })
+  await card.getByRole('button', { name: '收藏 主控-洛杉矶', exact: true }).click()
+  const controls = page.getByRole('group', { name: '快捷筛选和排序' })
+  const cards = page.locator('.node-card')
+  await expect(cards).toHaveCount(12)
+
+  for (const [label, count] of [['收藏', 1], ['总流量', 12], ['峰值', 12]] as const) {
+    const frames = await controls.getByRole('button', { name: new RegExp(`^${label}，`) }).evaluate(async (button) => {
+      const control = button as HTMLButtonElement
+      const existing = document.querySelector('.node-card[aria-label*="主控-洛杉矶 详情"]')
+      const read = () => {
+        const cards = [...document.querySelectorAll('.node-card')]
+        return {
+          retained: Boolean(existing && cards.includes(existing)),
+          positions: cards.map(card => [card.getAttribute('aria-label'), Math.round(card.getBoundingClientRect().left)]),
+        }
+      }
+      control.click()
+      const frames = []
+      const start = performance.now()
+      while (performance.now() - start < 300) {
+        await new Promise(requestAnimationFrame)
+        frames.push(read())
+      }
+      return frames
+    })
+    const final = frames.at(-1)!
+    expect(final.positions).toHaveLength(count)
+    expect(final.retained).toBe(true)
+    const shiftedFrame = frames.find(frame => !frame.retained || JSON.stringify(frame.positions) !== JSON.stringify(final.positions))
+    expect(shiftedFrame, `${label} settled at ${JSON.stringify(final)}`).toBeUndefined()
+  }
+})
+
 test('default map aggregates regions and supports keyboard, pointer, and group changes', async ({ page }) => {
   await installKomariFixture(page)
   await page.goto('/')
@@ -9,7 +47,16 @@ test('default map aggregates regions and supports keyboard, pointer, and group c
   const marker = map.locator('[data-map-marker-code="US"]')
   const boundary = map.locator('[data-map-region-code="US"]')
   const status = map.locator('[aria-live="polite"]')
-  await expect(map).toContainText('8 个地区 · 11 / 12 个节点在线')
+  const summary = map.getByRole('button', { name: /查看地区详情.*8 个地区 · 11 \/ 12 个节点在线/ })
+  await summary.press('Enter')
+  const details = page.getByRole('dialog', { name: '地区详情', exact: true })
+  const usa = details.getByRole('button', { name: '美国 2 / 2 在线', exact: true })
+  await expect(usa.locator('img')).toHaveAttribute('src', '/images/flags/US.svg')
+  const uk = details.getByRole('button', { name: '英国 0 / 1 在线', exact: true })
+  await expect(uk.locator('img')).toHaveAttribute('src', '/images/flags/GB.svg')
+  await page.keyboard.press('Escape')
+  await expect(details).toBeHidden()
+  await expect(summary).toBeFocused()
   await expect(map.locator('[data-map-marker-code="GB"]')).toHaveClass(/is-offline/)
   await marker.hover()
   await expect(boundary).toHaveClass(/is-active/)
@@ -20,18 +67,149 @@ test('default map aggregates regions and supports keyboard, pointer, and group c
   await marker.focus()
   await expect(boundary).toHaveClass(/is-active/)
   await marker.press('Enter')
-  await expect(marker).toHaveAttribute('aria-pressed', 'true')
-  await marker.press('Escape')
-  await expect(marker).toHaveAttribute('aria-pressed', 'false')
-  await expect(boundary).not.toHaveClass(/is-active/)
+  const states = map.getByRole('group', { name: '美国省州节点分布' })
+  await expect(states.locator('[data-map-province-code="US-CA"]')).toBeVisible()
+  await expect(states.locator('[data-map-marker-code]')).toHaveCount(0)
+  await expect(status).toContainText('节点仅定位到国家或地区')
+  await map.getByRole('button', { name: /查看地区详情.*仅国家定位/ }).press('Enter')
+  await expect(page.getByRole('dialog', { name: '美国省州详情' }).getByText('仅定位到国家或地区').locator('..')).toContainText('2 / 2 在线')
+  await page.keyboard.press('Escape')
+  await map.getByRole('button', { name: '返回全球' }).press('Enter')
+  await expect(marker).toBeFocused()
 
   await page.getByRole('tab', { name: '生产', exact: true }).click()
   await expect(map).toContainText('6 个地区 · 5 / 6 个节点在线')
   await expect(marker).toHaveAccessibleName(/1 \/ 1 个节点在线/)
 })
 
+test('province map combines explicit regions and IP lookup, with a country-only count', async ({ page }) => {
+  const uuid = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
+  await installKomariFixture(page, {
+    loggedIn: true,
+    nodeIpOverrides: {
+      [uuid(1)]: { ipv4: '8.8.8.8', ipv6: '', region: 'CN' },
+      [uuid(2)]: { ipv4: '1.1.1.1', ipv6: '', region: 'CN' },
+      [uuid(6)]: { ipv4: '', ipv6: '', region: 'CN' },
+    },
+    extraRegions: [{ code: 'CN-SH', name: '上海-演示', cpu: 'AMD EPYC' }],
+  })
+  await page.route('https://api.ip.sb/geoip/*', (route) => {
+    const first = route.request().url().endsWith('8.8.8.8')
+    return route.fulfill({ json: {
+      country_code: 'CN',
+      region: first ? 'Guangdong' : '广东省',
+      city: first ? 'Guangzhou' : 'Shenzhen',
+      latitude: first ? 23.13 : 22.54,
+      longitude: first ? 113.26 : 114.06,
+    } })
+  })
+  await page.goto('/')
+  const map = page.getByRole('region', { name: '节点地图' })
+  const china = map.getByRole('button', { name: '中国，3 / 4 个节点在线，查看省州分布' })
+  await china.press('Enter')
+  await expect(map.getByRole('group', { name: '中国省州节点分布' })).toBeVisible()
+  await expect(map.getByRole('button', { name: '广东省，2 / 2 个节点在线' })).toBeVisible()
+  const summary = map.getByRole('button', { name: /查看地区详情.*2 个省州 · 3 \/ 4 个节点在线/ })
+  await expect(summary).toBeFocused()
+  await summary.press('Enter')
+  const details = page.getByRole('dialog', { name: '中国省州详情' })
+  await expect(details.getByText('仅定位到国家或地区').locator('..')).toContainText('0 / 1 在线')
+  await details.getByRole('button', { name: '上海市 1 / 1 在线', exact: true }).click()
+  const shanghai = map.getByRole('button', { name: '上海市，1 / 1 个节点在线' })
+  await expect(shanghai).toHaveAttribute('aria-pressed', 'true')
+  const status = map.locator('[aria-live="polite"]')
+  await expect(status.getByText('上海市', { exact: true })).toBeVisible()
+  await expect(status).toContainText('1 / 1 个节点在线')
+  await expect(map.locator('[data-map-province-code="CN-SH"]')).toHaveClass(/is-active/)
+  await expect(map.locator('[data-map-province-code="CN-GD"]')).not.toHaveClass(/is-active/)
+  expect(await map.locator('[data-map-province-code]').count()).toBeGreaterThan(29)
+  await shanghai.press('Escape')
+  await expect(china).toBeFocused()
+})
+
+test('state map fits the drawing area after a viewport resize', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 850 })
+  await installKomariFixture(page, {
+    loggedIn: true,
+    nodeIpOverrides: {
+      '00000000-0000-4000-8000-000000000001': { ipv4: '8.8.8.8', ipv6: '', region: 'US' },
+    },
+  })
+  await page.route('https://api.ip.sb/geoip/*', route => route.fulfill({ json: {
+    latitude: 34.05,
+    longitude: -118.24,
+    country_code: 'US',
+    region: 'California',
+  } }))
+  await page.goto('/')
+  const map = page.getByRole('region', { name: '节点地图' })
+  const usa = map.getByRole('button', { name: /美国.*查看省州分布/ })
+  const worldDot = usa.locator('.star-map__dot')
+  await expect(worldDot).toBeVisible()
+  const desktopDot = (await worldDot.boundingBox())!.width
+  await usa.press('Enter')
+  const svg = map.getByRole('group', { name: '美国省州节点分布' })
+  const california = svg.getByRole('button', { name: /加利福尼亚州.*1 \/ 1/ })
+  const stateDot = california.locator('.star-map__dot')
+  await expect(svg.locator('[data-map-province-code="US-CA"]')).toHaveClass(/is-active/)
+  await expect(svg.locator('[data-map-province-code="US-NY"]')).toHaveAttribute('d', /^M/)
+  expect((await stateDot.boundingBox())!.width).toBeCloseTo(desktopDot, 1)
+  const desktopWidth = (await svg.boundingBox())!.width
+  await page.setViewportSize({ width: 360, height: 780 })
+  await expect.poll(() => svg.evaluate((element) => {
+    const svg = element as unknown as SVGSVGElement
+    const bounds = svg.getBoundingClientRect()
+    const view = svg.viewBox.baseVal
+    return bounds.width < 360 && Math.abs(view.width - bounds.width) < 1 && Math.abs(view.height - bounds.height) < 1
+  })).toBe(true)
+  const svgBox = (await svg.boundingBox())!
+  const pinBox = (await california.boundingBox())!
+  expect(svgBox.width).toBeLessThan(desktopWidth)
+  expect(pinBox.x).toBeGreaterThan(svgBox.x)
+  expect(pinBox.x + pinBox.width).toBeLessThan(svgBox.x + svgBox.width)
+  expect(pinBox.y).toBeGreaterThan(svgBox.y)
+  expect(pinBox.y + pinBox.height).toBeLessThan(svgBox.y + svgBox.height)
+  const mobileDot = (await stateDot.boundingBox())!.width
+  await map.getByRole('button', { name: '返回全球', exact: true }).click()
+  await expect(worldDot).toBeVisible()
+  expect((await worldDot.boundingBox())!.width).toBeCloseTo(mobileDot, 1)
+})
+
 test.describe('narrow touch layout', () => {
   test.use({ viewport: { width: 360, height: 780 }, hasTouch: true, isMobile: true })
+
+  test('public province codes support touch without IP lookup', async ({ page }) => {
+    let geoCalls = 0
+    await page.route('https://api.ip.sb/geoip/*', async (route) => {
+      geoCalls++
+      await route.abort()
+    })
+    await installKomariFixture(page, {
+      extraRegions: [
+        { code: 'CN-BJ', name: '北京-演示', cpu: 'AMD EPYC' },
+        { code: 'CN-GD', name: '广东-演示', cpu: 'AMD EPYC' },
+      ],
+    })
+    await page.goto('/')
+    const map = page.getByRole('region', { name: '节点地图' })
+    await map.getByRole('button', { name: /查看地区详情/ }).tap()
+    await page.getByRole('dialog', { name: '地区详情', exact: true }).getByRole('button', { name: '中国 2 / 2 在线', exact: true }).tap()
+    const regionalSvg = map.getByRole('group', { name: '中国省州节点分布' })
+    await expect(regionalSvg.locator('[data-map-province-code="CN-GD"]')).toBeVisible()
+    await expect.poll(() => regionalSvg.evaluate((element) => {
+      const svg = element as unknown as SVGSVGElement
+      const box = svg.getBoundingClientRect()
+      const view = svg.viewBox.baseVal
+      return Math.abs(view.width - box.width) < 1 && Math.abs(view.height - box.height) < 1
+    })).toBe(true)
+    const guangdong = map.getByRole('button', { name: '广东省，1 / 1 个节点在线' })
+    await guangdong.tap()
+    await expect(guangdong).toHaveAttribute('aria-pressed', 'true')
+    await expect(map.locator('[data-map-province-code="CN-GD"]')).toHaveClass(/is-active/)
+    await map.getByRole('button', { name: '返回全球', exact: true }).tap()
+    await expect(map.getByRole('group', { name: '节点地区分布' })).toBeVisible()
+    expect(geoCalls).toBe(0)
+  })
 
   test('map, quick filters, search, and view switching stay usable', async ({ page }) => {
     await installKomariFixture(page, { dark: true })
@@ -40,8 +218,9 @@ test.describe('narrow touch layout', () => {
     await expect(map).toHaveCSS('border-top-color', 'rgba(155, 92, 255, 0.31)')
     const gb = map.locator('[data-map-marker-code="GB"]')
     await gb.tap()
-    await expect(gb).toHaveAttribute('aria-pressed', 'true')
-    await expect(map.locator('[aria-live="polite"]')).toContainText('0 / 1 个节点在线')
+    await expect(map.getByRole('group', { name: '英国省州节点分布' })).toBeVisible()
+    await expect(map.getByRole('button', { name: /仅国家定位.*0 \/ 1 个节点在线/ })).toBeVisible()
+    await map.getByRole('button', { name: '返回全球' }).tap()
 
     const overload = page.getByRole('button', { name: /^高负载，/ })
     const all = page.getByRole('tab', { name: '全部节点' })

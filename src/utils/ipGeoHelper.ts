@@ -14,6 +14,7 @@ export interface IpGeo {
   lat: number
   lng: number
   city?: string
+  subdivision?: string
   countryCode?: string
   /** ASN 组织 / ISP 名称（用于识别厂商） */
   org?: string
@@ -22,7 +23,7 @@ export interface IpGeo {
 }
 
 const CACHE_PREFIX = 'komari-theme-emerald:ipgeo'
-const CACHE_VERSION = 5
+const CACHE_VERSION = 6
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 天
 const NEGATIVE_CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 小时
 const IP_GEO_TIMEOUT_MS = 5000
@@ -60,6 +61,7 @@ function isValidGeo(geo: unknown): geo is IpGeo {
   const g = geo as Record<string, unknown>
   return typeof g.lat === 'number' && Number.isFinite(g.lat) && g.lat >= -90 && g.lat <= 90
     && typeof g.lng === 'number' && Number.isFinite(g.lng) && g.lng >= -180 && g.lng <= 180
+    && (g.subdivision === undefined || typeof g.subdivision === 'string')
     && !(g.lat === 0 && g.lng === 0)
 }
 
@@ -167,6 +169,7 @@ const fromIpSb: Provider = async (ip) => {
     lat,
     lng,
     city: typeof d.city === 'string' ? d.city : undefined,
+    subdivision: pickString(d.region),
     countryCode: typeof d.country_code === 'string' ? d.country_code : undefined,
     org: pickString(d.organization, d.asn_organization, d.isp),
     asn: typeof d.asn === 'number' ? `AS${d.asn}` : pickString(d.asn),
@@ -191,6 +194,7 @@ const fromIpinfo: Provider = async (ip) => {
     lat,
     lng,
     city: typeof d.city === 'string' ? d.city : undefined,
+    subdivision: pickString(d.region),
     countryCode: typeof d.country === 'string' ? d.country : undefined,
     org,
     asn: org?.match(ASN_ORG_PREFIX_REGEX)?.[0],
@@ -213,6 +217,7 @@ const fromIpapiCo: Provider = async (ip) => {
     lat,
     lng,
     city: typeof d.city === 'string' ? d.city : undefined,
+    subdivision: pickString(d.region),
     countryCode: typeof d.country_code === 'string' ? d.country_code : undefined,
     org: pickString(d.org),
     asn: pickString(d.asn),
@@ -236,6 +241,7 @@ const fromIpwhois: Provider = async (ip) => {
     lat,
     lng,
     city: typeof d.city === 'string' ? d.city : undefined,
+    subdivision: pickString(d.region),
     countryCode: typeof d.country_code === 'string' ? d.country_code : undefined,
     org: pickString(conn.org, conn.isp),
     asn: typeof conn.asn === 'number' ? `AS${conn.asn}` : pickString(conn.asn),
@@ -281,6 +287,7 @@ const fromGenericJson: Provider = async (ip, template) => {
     lat,
     lng,
     city: pickString(d.city),
+    subdivision: pickString(d.subdivision, d.province, d.state, d.region),
     countryCode: pickString(d.country_code, d.country),
     org: pickString(d.org, d.organization, d.isp, conn.org, conn.isp),
     asn: pickString(rawAsn, conn.asn),

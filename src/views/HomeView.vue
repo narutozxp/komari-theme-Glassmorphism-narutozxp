@@ -302,10 +302,6 @@ function openPingDialog(node: NodeData) {
   pingDialogNode.value = node
 }
 
-function getNodeItemTransitionKey(node: NodeData): string {
-  return `${appStore.nodeSelectedGroup}-${activeQuickControl.value ?? 'all'}-${node.uuid}`
-}
-
 function getNodeItemTransitionStyle(index: number): Record<string, string> {
   return {
     '--node-item-delay': `${Math.min(index, nodeItemStaggerLimit) * nodeItemStaggerMs}ms`,
@@ -557,12 +553,15 @@ const nodeCardGridClass = computed(() => {
               :appear="enableNodeCardTransition"
               :css="enableNodeCardTransition"
               name="node-card-switch"
+              appear-active-class="node-card-appear-active"
+              appear-from-class="node-card-appear-from"
               tag="div"
               :class="nodeCardGridClass"
+              @leave="(_element, remove) => remove()"
             >
               <div
                 v-for="(node, index) in nodeList"
-                :key="`${getNodeItemTransitionKey(node)}:${deferNodeCards ? 'deferred' : 'full'}`"
+                :key="`${node.uuid}:${deferNodeCards ? 'deferred' : 'full'}`"
                 class="min-w-0"
                 :style="getNodeItemTransitionStyle(index)"
               >
@@ -633,32 +632,18 @@ const nodeCardGridClass = computed(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.node-card-switch-enter-active,
-.node-card-switch-leave-active {
+.node-card-appear-active {
   transition:
     opacity 180ms ease,
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
     filter 180ms ease;
-}
-
-.node-card-switch-enter-active {
   transition-delay: var(--node-item-delay, 0ms);
 }
 
-.node-card-switch-move {
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.node-card-switch-enter-from {
+.node-card-appear-from {
   opacity: 0;
-  transform: translateY(10px) scale(0.985);
+  transform: translateY(10px);
   filter: blur(3px);
-}
-
-.node-card-switch-leave-to {
-  opacity: 0;
-  transform: translateY(-6px) scale(0.99);
-  filter: blur(2px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -666,15 +651,12 @@ const nodeCardGridClass = computed(() => {
     animation: none;
   }
 
-  .node-card-switch-enter-active,
-  .node-card-switch-leave-active,
-  .node-card-switch-move {
+  .node-card-appear-active {
     transition: none;
     transition-delay: 0ms;
   }
 
-  .node-card-switch-enter-from,
-  .node-card-switch-leave-to {
+  .node-card-appear-from {
     opacity: 1;
     transform: none;
     filter: none;

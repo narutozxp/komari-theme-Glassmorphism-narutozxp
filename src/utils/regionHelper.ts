@@ -1,3 +1,5 @@
+import { getChinaProvinceFromRegion } from '@/utils/chinaProvince'
+
 const REGION_FLAG_REGEX = /[\u{1F1E0}-\u{1F1FF}]{2}/gu
 
 // 地区emoji到名称的映射
@@ -1564,6 +1566,12 @@ function getRegionEntry(region: string | null | undefined): RegionEntry | null {
   const direct = emojiToRegionMap[trimmed]
   if (direct)
     return { emoji: trimmed, en: direct.en, zh: direct.zh, code: direct.code, aliases: direct.aliases }
+
+  const province = getChinaProvinceFromRegion(trimmed)
+  if (province) {
+    const china = emojiToRegionMap['🇨🇳']!
+    return { emoji: '🇨🇳', en: province.name, zh: province.label, code: china.code, aliases: [...china.aliases, province.code] }
+  }
 
   const lowerRegion = trimmed.toLowerCase()
   for (const [emoji, info] of Object.entries(emojiToRegionMap)) {
