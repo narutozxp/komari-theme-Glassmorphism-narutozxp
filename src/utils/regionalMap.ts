@@ -73,7 +73,13 @@ export function fitRegionalMap(width: number, height: number, points: Point[], b
   return { transform: `translate(${translateX} ${translateY}) scale(${scaleX} ${scale})`, scale, scaleX, translateX, translateY }
 }
 
+const communityCouncilSuffix = /\s+community development council$/
+
+function normalizeBoundaryName(name: string): string {
+  return name.normalize('NFKC').trim().toLowerCase().replace(communityCouncilSuffix, '')
+}
+
 export function findRegionalBoundary(boundaries: RegionalBoundary[], id: string, label: string) {
-  const name = label.normalize('NFKC').trim().toLowerCase()
-  return boundaries.find(boundary => boundary.id === id || name === boundary.name.toLowerCase() || name === boundary.localName.toLowerCase())
+  const name = normalizeBoundaryName(label)
+  return boundaries.find(boundary => boundary.id === id || name === normalizeBoundaryName(boundary.name) || name === normalizeBoundaryName(boundary.localName))
 }

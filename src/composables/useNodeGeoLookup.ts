@@ -26,8 +26,8 @@ const IP_GEO_BATCH_SIZE = 8
 /** 查询未完成时挂起本轮请求，供多个调用方共享同一次网络往返。 */
 const pending = new Map<string, Promise<void>>()
 
-function applyProviderUrls(appStore: ReturnType<typeof useAppStore>): void {
-  const signature = JSON.stringify(appStore.ipGeoProviderUrls)
+function applyProviderUrls(appStore: ReturnType<typeof useAppStore>, preferSubdivision: boolean): void {
+  const signature = JSON.stringify([appStore.ipGeoProviderUrls, preferSubdivision])
   if (signature !== providerSignature) {
     resetNodeGeoLookup()
     providerSignature = signature
@@ -40,7 +40,8 @@ function applyProviderUrls(appStore: ReturnType<typeof useAppStore>): void {
  * 权限不足、未登录或主题设置显式留空时直接返回，卡片与地球都回落到后台 region。
  */
 export async function ensureNodeGeoLookup(appStore: ReturnType<typeof useAppStore>, nodes: NodeData[]): Promise<void> {
-  applyProviderUrls(appStore)
+  const preferSubdivision = !appStore.hideEarth && appStore.earthRenderer === 'starMap'
+  applyProviderUrls(appStore, preferSubdivision)
   const current = generation
 
   if (appStore.ipGeoProviderUrls?.length === 0)
@@ -81,7 +82,7 @@ export async function ensureNodeGeoLookup(appStore: ReturnType<typeof useAppStor
         for (const ip of candidates) {
           if (current !== generation)
             break
-          const geo = ipGeoMap.value.get(ip) ?? await lookupIpGeo(ip)
+          const geo = ipGeoMap.value.get(ip) ?? await lookupIpGeo(ip, preferSubdivision)
           attempts.push({ ip, geo })
           if (geo)
             break

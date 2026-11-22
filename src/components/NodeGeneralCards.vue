@@ -706,7 +706,7 @@ const showEarth = computed(() => !appStore.hideEarth)
 
 // 无论地球是否显示都补齐IP 地理位置，保证节点卡片国旗与地球落点始终同源。
 watch(
-  [() => nodesStore.visibleNodes, () => appStore.ipGeoProviderUrls, () => appStore.privateFeaturesAllowed],
+  [() => nodesStore.visibleNodes, () => appStore.ipGeoProviderUrls, () => appStore.privateFeaturesAllowed, () => appStore.earthRenderer, showEarth],
   () => {
     if (appStore.privateFeaturesAllowed)
       void ensureNodeGeoLookup(appStore, nodesStore.visibleNodes)

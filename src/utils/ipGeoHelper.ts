@@ -2,19 +2,22 @@
  * 根据 IP 在线查询地理坐标与城市，用于地球的城市级定位。
  *
  * 多个 HTTPS 服务依次回退（默认 ip.sb → ipinfo.io → ipwho.is → ipapi.co，可在主题设置里改），
- * 任一返回经纬度即采用；
+ * 优先采用首个有效坐标，省州地图可从后续同国家结果补齐行政区；
  * 结果按 IP 缓存到 localStorage（带版本与过期时间），避免重复请求与频率限制。
  * 全部失败时写入短期负缓存，调用方应回落到国家级定位。
  */
 
 import { isPublicIp } from '@/utils/ipAddress'
 import { DEFAULT_IP_GEO_PROVIDER_URLS } from '@/utils/ipGeoProviders'
+import { hasRegionalBoundaries } from '@/utils/regionalMap'
+import { getRegionDisplayName } from '@/utils/regionHelper'
 
 export interface IpGeo {
   lat: number
   lng: number
   city?: string
   subdivision?: string
+  subdivisionCoord?: [number, number]
   countryCode?: string
   /** ASN 组织 / ISP 名称（用于识别厂商） */
   org?: string
@@ -55,17 +58,32 @@ function cacheKey(ip: string, configuration: string): string {
   return `${CACHE_PREFIX}:${encodeURIComponent(configuration)}:${ip}`
 }
 
+function validCoordinates(lat: unknown, lng: unknown): boolean {
+  return typeof lat === 'number' && Number.isFinite(lat) && lat >= -90 && lat <= 90
+    && typeof lng === 'number' && Number.isFinite(lng) && lng >= -180 && lng <= 180
+    && !(lat === 0 && lng === 0)
+}
+
 function isValidGeo(geo: unknown): geo is IpGeo {
   if (!geo || typeof geo !== 'object')
     return false
   const g = geo as Record<string, unknown>
-  return typeof g.lat === 'number' && Number.isFinite(g.lat) && g.lat >= -90 && g.lat <= 90
-    && typeof g.lng === 'number' && Number.isFinite(g.lng) && g.lng >= -180 && g.lng <= 180
+  return validCoordinates(g.lat, g.lng)
+    && (g.countryCode === undefined || typeof g.countryCode === 'string')
     && (g.subdivision === undefined || typeof g.subdivision === 'string')
-    && !(g.lat === 0 && g.lng === 0)
+    && (g.subdivisionCoord === undefined || (Array.isArray(g.subdivisionCoord) && g.subdivisionCoord.length === 2 && validCoordinates(g.subdivisionCoord[0], g.subdivisionCoord[1])))
 }
 
-function readCache(ip: string, configuration: string): { geo: IpGeo | null, negative: boolean } | null {
+export function getIpGeoSubdivision(geo: IpGeo | undefined): string | undefined {
+  const name = geo?.subdivision?.normalize('NFKC').trim()
+  if (!name)
+    return undefined
+  const code = geo?.countryCode?.trim().toUpperCase()
+  const countryNames = code ? [code, getRegionDisplayName(code), getRegionDisplayName(code, 'en')] : []
+  return countryNames.some(country => country.toLowerCase() === name.toLowerCase()) ? undefined : name
+}
+
+function readCache(ip: string, configuration: string, preferSubdivision: boolean): { geo: IpGeo | null } | null {
   if (typeof window === 'undefined')
     return null
   try {
@@ -76,15 +94,13 @@ function readCache(ip: string, configuration: string): { geo: IpGeo | null, nega
     if (parsed.version !== CACHE_VERSION)
       return null
 
-    const ttl = parsed.negative ? NEGATIVE_CACHE_TTL_MS : CACHE_TTL_MS
-    if (Date.now() - parsed.updatedAt > ttl)
-      return null
-
+    const age = Date.now() - parsed.updatedAt
     if (parsed.negative)
-      return { geo: null, negative: true }
+      return age <= NEGATIVE_CACHE_TTL_MS ? { geo: null } : null
     if (!isValidGeo(parsed.geo))
       return null
-    return { geo: parsed.geo, negative: false }
+    const partial = preferSubdivision && hasRegionalBoundaries(parsed.geo.countryCode?.trim().toUpperCase() ?? '') && !getIpGeoSubdivision(parsed.geo)
+    return age <= (partial ? NEGATIVE_CACHE_TTL_MS : CACHE_TTL_MS) ? { geo: parsed.geo } : null
   }
   catch {
     return null
@@ -335,15 +351,15 @@ const inflight = new Map<string, Promise<IpGeo | null>>()
 /**
  * 查询某个 IP 的地理坐标（含缓存与多服务回退）。失败返回 null。
  */
-export async function lookupIpGeo(ip: string): Promise<IpGeo | null> {
+export async function lookupIpGeo(ip: string, preferSubdivision = false): Promise<IpGeo | null> {
   const normalizedIp = ip.trim()
   const urls = [...activeProviderUrls]
   if (!isPublicIp(normalizedIp) || !urls.length)
     return null
 
-  const configuration = JSON.stringify(urls)
+  const configuration = JSON.stringify(preferSubdivision ? { urls, preferSubdivision } : urls)
   const key = cacheKey(normalizedIp, configuration)
-  const cached = readCache(normalizedIp, configuration)
+  const cached = readCache(normalizedIp, configuration, preferSubdivision)
   if (cached)
     return cached.geo
 
@@ -352,20 +368,34 @@ export async function lookupIpGeo(ip: string): Promise<IpGeo | null> {
     return existing
 
   const task = (async () => {
-    // Respect configured priority; only failures/backoff advance to another source.
+    let primary: IpGeo | undefined
     for (const provider of orderedProviders(urls)) {
       try {
         const geo = await provider.lookup(normalizedIp, provider.template)
-        if (geo && isValidGeo(geo)) {
-          markProviderSuccess(provider.id)
-          writeCache(normalizedIp, configuration, geo)
-          return geo
+        if (!geo || !isValidGeo(geo)) {
+          markProviderFailure(provider.id)
+          continue
         }
-        markProviderFailure(provider.id)
+        markProviderSuccess(provider.id)
+        const country = geo.countryCode?.trim().toUpperCase()
+        const subdivision = getIpGeoSubdivision(geo)
+        if (!primary) {
+          primary = geo
+          if (!preferSubdivision || subdivision || !country || !hasRegionalBoundaries(country))
+            break
+        }
+        else if (subdivision && country === primary.countryCode?.trim().toUpperCase()) {
+          primary = { ...primary, subdivision, subdivisionCoord: [geo.lat, geo.lng] }
+          break
+        }
       }
       catch {
         markProviderFailure(provider.id)
       }
+    }
+    if (primary) {
+      writeCache(normalizedIp, configuration, primary)
+      return primary
     }
     writeNegativeCache(normalizedIp, configuration)
     return null

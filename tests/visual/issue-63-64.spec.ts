@@ -63,6 +63,48 @@ test('geo respects source priority and keeps two Japanese city names separate', 
   expect(calls.every(url => url.startsWith('https://api.ip.sb/'))).toBe(true)
 })
 
+test('the province map fills missing subdivision data from a later matching source', async ({ page }) => {
+  const providers = [
+    'https://api.ip.sb/geoip/{ip}',
+    'https://ipinfo.io/{ip}/json',
+    'https://geo-other.example/{ip}',
+    'https://ipwho.is/{ip}',
+  ]
+  await installKomariFixture(page, {
+    loggedIn: true,
+    nodeIpOverrides: { [UUID]: { ipv4: '8.8.8.8', ipv6: '', region: 'SG' } },
+    themeSettingsOverrides: { ipGeoProviderUrls: providers.join('\n') },
+  })
+  const calls: string[] = []
+  const responses = {
+    'api.ip.sb': { latitude: 1.2872, longitude: 103.8507, country_code: 'SG', city: 'Singapore' },
+    'ipinfo.io': { loc: '1.2897,103.8501', country: 'SG', region: 'Singapore' },
+    'geo-other.example': { lat: 35.68, lng: 139.76, country_code: 'JP', region: 'Tokyo' },
+    'ipwho.is': { latitude: 1.2896, longitude: 103.8501, country_code: 'SG', region: 'Central Singapore' },
+  }
+  await page.route('**/8.8.8.8{,/json}', async (route) => {
+    const host = new URL(route.request().url()).hostname as keyof typeof responses
+    calls.push(host)
+    await route.fulfill({ json: responses[host] })
+  })
+  const map = page.getByRole('region', { name: '节点地图' })
+  const singapore = map.getByRole('button', { name: /^新加坡.*查看省州分布/ })
+  const district = map.getByRole('button', { name: /中区社区发展理事会.*1 \/ 1 个节点在线/ })
+  const sources = Object.keys(responses)
+
+  await page.goto('/')
+  await singapore.press('Enter')
+  await expect(district).toBeVisible()
+  await expect(map.locator('[data-map-province-code="SG-01"]')).toHaveClass(/is-active/)
+  expect(calls).toEqual(sources)
+
+  await updateGeoState(page, { urls: '' })
+  await expect(district).toHaveCount(0)
+  await updateGeoState(page, { urls: providers.join('\n') })
+  await expect(district).toBeVisible()
+  expect(calls).toEqual(sources)
+})
+
 for (const action of ['change provider', 'revoke permission'] as const) {
   test(`geo ignores in-flight results after ${action}`, async ({ page }) => {
     await installKomariFixture(page, {

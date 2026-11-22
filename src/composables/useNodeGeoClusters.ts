@@ -7,6 +7,7 @@ import { useNodesStore } from '@/stores/nodes'
 import { findChinaProvince, getChinaProvinceFromRegion } from '@/utils/chinaProvince'
 import { formatCityNameZh } from '@/utils/cityNameHelper'
 import { getCoordByCode, getCountryCodeFromRegion } from '@/utils/geoHelper'
+import { getIpGeoSubdivision } from '@/utils/ipGeoHelper'
 import { getRegionDisplayName } from '@/utils/regionHelper'
 
 interface UseNodeGeoClustersOptions {
@@ -58,18 +59,18 @@ export function useNodeGeoClusters(options: UseNodeGeoClustersOptions = {}) {
     if (options.groupBy === 'province') {
       const geoCode = geo?.countryCode?.trim().toUpperCase()
       const code = hasCoordinates && geoCode && countryCodePattern.test(geoCode) ? geoCode : regionCode
+      const label = getIpGeoSubdivision(geo)?.replace(provinceWhitespace, ' ')
       const province = getChinaProvinceFromRegion(node.region)
-        ?? (code === 'CN' && geo?.subdivision ? findChinaProvince(geo.subdivision) : undefined)
+        ?? (code === 'CN' && label ? findChinaProvince(label) : undefined)
       if (province)
         return { id: province.code, code: 'CN', coord: province.coord, label: province.label, subdivision: true }
 
-      const label = geo?.subdivision?.normalize('NFKC').trim().replace(provinceWhitespace, ' ')
       const geoCoord: [number, number] | null = hasCoordinates ? [geo.lat, geo.lng] : null
       if (code && geoCoord && label) {
         return {
           id: `${code}:${encodeURIComponent(label.toLowerCase())}`,
           code,
-          coord: geoCoord,
+          coord: geo?.subdivisionCoord ?? geoCoord,
           label,
           subdivision: true,
         }
