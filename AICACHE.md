@@ -12,6 +12,12 @@
 
 ## 当前任务
 
+- v3.4.10 本地发布准备已完成（M6）。主题清单和 README 已同步，包含详情页 Ping 丢包趋势与多行图例。远端已确认 v3.4.9 标签存在，v3.4.10 的 Actions 和 Release 附件待推送后验证。
+
+- 已完成（M4）。Ping 趋势图例采用自适应多行布局，长名称在单项内换行，可独立切换每条线路的可见性。已补充窄屏和多任务回归。
+
+- 已完成（M5/M4）。VPS 详情底部 Ping 趋势支持延迟与丢包率切换，复用任务选择和时间范围。新版读取分时丢包比例，旧版按时间桶汇总探测记录。已补充 README 和回归用例。
+
 - v3.4.9 本地发布准备已完成（M6）。主题清单和 README 已更新。本次包含省州定位补齐和新加坡行政区名称匹配。
 - Lint、类型检查、构建、ZIP 校验和 74 项 Playwright 回归通过。包内清单为 v3.4.9，远端已有 v3.4.8 标签，v3.4.9 的 Actions 与 Release 附件待推送后验证。
 
@@ -242,6 +248,16 @@
 - 不做：不把 Glassmorphism 默认主题替换混入计费 PR #604；不发布测试构建为正式 Release；不构建 Windows 包。
 
 ## 执行日志
+
+### 2026-11-23 Ping 趋势多行图例
+
+- 将图例放在绘图区下方，按容器宽度自动换行，长名称在单项内折行。图例与曲线共用颜色及线型。
+- 图例按钮按任务 ID 切换曲线可见性，延迟和丢包率共用该状态。同名任务用编号区分显示。
+
+### 2026-11-23 VPS 详情 Ping 趋势
+
+- 延迟和丢包率共用本机任务、时间范围和配色。新版请求同时读取延迟及丢包比例，旧版按时间桶汇总失败次数与探测总数，缺测时保留断点。
+- 将切换放到图表标题栏，丢包率按实际峰值选择百分比刻度。详情页底部留出空间，滚动到底时图例可避开访客信息和返回顶部按钮。
 
 ### 2026-08-11 Ping task order parity
 
@@ -521,6 +537,12 @@
 
 ## 验证记录
 
+- 2026-11-23 v3.4.10 本地发布准备：Lint、类型检查、构建和 10 项 Ping 浏览器回归通过。ZIP 完整性和顶层结构校验通过，包内清单为 v3.4.10。
+
+- 2026-11-23 Ping 趋势多行图例：Lint、类型检查、构建、ZIP 完整性和差异检查通过。完整 Playwright 回归通过 78 项，最终调整后复测相关 29 项。用 14 条线路检查了桌面及 375px 宽度的图例、超长名称、键盘切换和同名线路。
+
+- 2026-11-23 VPS 详情 Ping 趋势：`bun run lint`、`bun run build`、`git diff --check`、ZIP 完整性和 77 项 Playwright 回归通过。检查了桌面浅色和手机暗色截图，以及新版数据断点、100% 丢包和旧版回退。
+
 - 2026-07-14 v3.1.4 Issue #18 release：`bun run lint`、`bun run build`、`git diff --check` 通过；发布提交 `91c9b06` 已推送 `main`，Actions run `#29312369165`（#49）成功，tag / Release target 均为完整提交 `91c9b06fc5c4b5ee2636dc18779861186806abd7`，Issue #18 已关闭。线上 zip `komari-theme-Glassmorphism-build-91c9b06.zip` 大小 5,114,852 bytes，SHA-256 `f8b4c9b6f61cc66d755d7a612357d16d1d2774f9494b9b0c3ce87e572ee5da9b`，下载复核顶层结构 `komari-theme.json`、`preview.png`、`dist/`，包内版本 `3.1.4`。构建仍只有既有 `@vueuse/core` PURE 注释与 `globe` 大 chunk 警告。
 - 2026-07-14 v3.1.3 release：发布提交 `4f37416` 已推送 `main`；GitHub Actions run `#29311122789` 成功。Release `v3.1.3` 为正式发布（非 draft / prerelease），target 为完整提交 `4f3741692bd81141ed542614d5b31a01ff0dc0fc`，zip 资产 `komari-theme-Glassmorphism-build-4f37416.zip` 上传状态为 `uploaded`。下载复核：大小 5,120,783 bytes，SHA-256 `f4d5f1be0c769ffc5372ab6a9b780042768f82529827b7222a843ef642605bee`，顶层结构 `komari-theme.json`、`preview.png`、`dist/`，包内版本 `3.1.3`。
 - 2026-07-14 v3.1.0 release：发布提交 `14dac71` 已推送 `main`；GitHub Actions run `#42` 成功。Release `v3.1.0` 为正式发布（非 draft / prerelease），target 为完整提交 `14dac711d3e1ad1e7963c6dc2609ab6d1921f82d`，zip 资产上传状态为 `uploaded`。
@@ -556,6 +578,8 @@
 - 不应对整个 `NodeData` 使用 `markRaw`，否则会破坏实时 CPU、内存、网络和在线状态响应式刷新。
 
 ## 交接说明
+
+- VPS 详情与 Ping 弹窗共用 `PingChart.vue`。切换指标直接复用同次查询结果，旧版丢包统计用 `src/utils/pingLossHistory.ts`。
 
 已完成：
 

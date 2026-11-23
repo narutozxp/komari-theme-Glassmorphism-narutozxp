@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import type { MetricSeries, PingMetricTaskStats, PingRecord, PingTaskInfo } from '@/utils/rpc'
+import type { NormalizedMetricSeries } from '@/utils/metricSeries'
+import type { PingChartRow, PingChartSample } from '@/utils/pingLossHistory'
+import type { PingMetricTaskStats, PingTaskInfo } from '@/utils/rpc'
 import { Icon } from '@iconify/vue'
 import dayjs from 'dayjs'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch, watchEffect } from 'vue'
@@ -12,14 +14,16 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTouchTooltipTrigger } from '@/composables/useTouchTooltipTrigger'
 import { PING_RECORD_MAX_COUNT } from '@/constants/load'
+import { TIME_MS } from '@/constants/time'
 import { loadPingRecordsWithTasks } from '@/services/history.service'
 import { loadPingMetricStats, loadPublicPingTasks, queryMetrics } from '@/services/metrics.service'
 import { useAppStore } from '@/stores/app'
 import { ACCESSIBLE_LINE_TYPES, getChartSeriesPalette } from '@/utils/chartPalette'
-import { isPingMetric, normalizeMetricSeriesList, orderPingTasksByBackend, PING_LATENCY_METRIC, pingTaskId, pingTaskName } from '@/utils/metricSeries'
+import { normalizeMetricSeriesList, orderPingTasksByBackend, PING_LATENCY_METRIC, PING_LOSS_METRIC, pingTaskId, pingTaskName } from '@/utils/metricSeries'
 import { resolvePingAxisScale } from '@/utils/pingChartAxisScale'
 import { escapePingTooltip, pingChartTaskLabels } from '@/utils/pingChartPresentation'
 import { smoothPingChartDisplayRows } from '@/utils/pingChartSmoothing'
+import { buildLegacyPingLossHistory } from '@/utils/pingLossHistory'
 import '@/utils/echarts' // 共享 ECharts 配置
 
 const props = defineProps<{
@@ -153,7 +157,8 @@ watch(availableViews, (views) => {
 }, { immediate: true })
 
 // ==================== 数据状态 ====================
-const remoteData = shallowRef<PingRecord[]>([])
+const remoteData = shallowRef<PingChartSample[]>([])
+const metricLossSamples = shallowRef<PingChartSample[] | null>(null)
 const tasks = shallowRef<PingTaskInfo[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -161,6 +166,13 @@ const legacyCustomRangeFallback = ref(false)
 
 // 任务选择
 const selectedTaskIds = ref<number[]>([])
+const hiddenLegendTaskIds = ref(new Set<number>())
+const chartMetrics = [
+  { value: 'latency', label: '延迟', icon: 'tabler:activity' },
+  { value: 'loss', label: '丢包率', icon: 'tabler:cloud-exclamation' },
+] as const
+const chartMetric = ref<typeof chartMetrics[number]['value']>('latency')
+const isLossChart = computed(() => chartMetric.value === 'loss')
 const cutPeak = ref(false)
 const isTouchTooltipMode = ref(false)
 const activeTaskTooltipId = ref<number | null>(null)
@@ -170,7 +182,7 @@ const touchTooltip = useTouchTooltipTrigger(isTouchTooltipMode, () => {
   smoothInfoTooltipOpen.value = false
 })
 
-const chartMargin = { top: 30, right: 24, bottom: 52, left: 56 }
+const chartMargin = { top: 30, right: 24, bottom: 30, left: 56 }
 let coarsePointerMediaQuery: MediaQueryList | null = null
 let fetchRecordsSequence = 0
 
@@ -244,32 +256,32 @@ function normalizeMetricTask(stat: PingMetricTaskStats): PingTaskInfo {
   }
 }
 
-function buildMetricRecords(seriesList: MetricSeries[]): PingRecord[] {
-  const records: PingRecord[] = []
-  const normalizedSeriesList = normalizeMetricSeriesList(seriesList).filter(isPingMetric)
+function buildMetricSamples(seriesList: NormalizedMetricSeries[], metric: string): PingChartSample[] {
+  const samples: PingChartSample[] = []
+  const isLoss = metric === PING_LOSS_METRIC
 
-  for (const series of normalizedSeriesList) {
+  for (const series of seriesList) {
+    if (series.metric_key !== metric)
+      continue
     const taskId = normalizeMetricTaskId(pingTaskId(series))
     if (!Number.isFinite(taskId))
       continue
 
     for (const point of series.points) {
-      if (point.value === null)
-        continue
-
-      records.push({
-        client: series.entity_id,
+      const value = point.value
+      const valid = value !== null && Number.isFinite(value) && value >= 0 && (!isLoss || value <= 1)
+      samples.push({
         task_id: taskId,
         time: point.time,
-        value: point.value,
+        value: valid ? value * (isLoss ? 100 : 1) : null,
       })
     }
   }
 
-  return records.sort((a, b) => dayjs(a.time).valueOf() - dayjs(b.time).valueOf())
+  return samples.sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
 }
 
-async function loadMetricPingPayload(nodeUuid: string): Promise<{ records: PingRecord[], tasks: PingTaskInfo[] } | null> {
+async function loadMetricPingPayload(nodeUuid: string) {
   const range = appliedCustomRange.value
   const metricRangeParams = isCustomRange.value && range
     ? { start: range.start.toDate().toISOString(), end: range.end.toDate().toISOString() }
@@ -278,7 +290,7 @@ async function loadMetricPingPayload(nodeUuid: string): Promise<{ records: PingR
   const [statsResult, metricsResult, backendTasksResult] = await Promise.allSettled([
     loadPingMetricStats({ entity_id: nodeUuid, ...metricRangeParams, max_points: PING_RECORD_MAX_COUNT }),
     queryMetrics({
-      metric_keys: [PING_LATENCY_METRIC],
+      metric_keys: [PING_LATENCY_METRIC, PING_LOSS_METRIC],
       entity_id: nodeUuid,
       ...metricRangeParams,
       downsample: true,
@@ -292,44 +304,31 @@ async function loadMetricPingPayload(nodeUuid: string): Promise<{ records: PingR
   const metricStats = statsResult.status === 'fulfilled'
     ? (statsResult.value.stats ?? []).filter(stat => stat.entity_id === nodeUuid)
     : []
-  const metricRecords = metricsResult.status === 'fulfilled'
-    ? buildMetricRecords(metricsResult.value.series)
+  const series = metricsResult.status === 'fulfilled'
+    ? normalizeMetricSeriesList(metricsResult.value.series).filter(item => item.entity_id === nodeUuid)
     : []
-
-  const metricTaskIds = new Set(metricRecords.map(record => record.task_id))
+  const records = buildMetricSamples(series, PING_LATENCY_METRIC)
+  const lossSamples = buildMetricSamples(series, PING_LOSS_METRIC)
+  const metricTaskIds = new Set<number>()
+  for (const samples of [records, lossSamples]) {
+    for (const sample of samples) {
+      if (sample.value !== null)
+        metricTaskIds.add(sample.task_id)
+    }
+  }
   const exactStatTaskIds = new Set(
     metricStats
       .filter(stat => stat.total > 0 && !stat.loss_approximate && Number.isFinite(stat.loss))
       .map(stat => normalizeMetricTaskId(stat.task_id)),
   )
-  if (!metricRecords.length || [...metricTaskIds].some(taskId => !exactStatTaskIds.has(taskId)))
+  if (!metricTaskIds.size || [...metricTaskIds].some(taskId => !exactStatTaskIds.has(taskId)))
     return null
 
-  const taskMap = new Map<number, PingTaskInfo>()
-  for (const stat of metricStats) {
-    const task = normalizeMetricTask(stat)
-    taskMap.set(task.id, task)
-  }
-
-  for (const series of normalizeMetricSeriesList(
-    metricsResult.status === 'fulfilled' ? metricsResult.value.series : [],
-  ).filter(isPingMetric)) {
-    const taskId = normalizeMetricTaskId(pingTaskId(series))
-    if (!taskId || taskMap.has(taskId))
-      continue
-
-    taskMap.set(taskId, {
-      id: taskId,
-      name: pingTaskName(series) || `Task ${taskId}`,
-      interval: series.interval_seconds ?? 0,
-      loss: 0,
-    })
-  }
-
   return {
-    records: metricRecords,
+    records,
+    lossSamples,
     tasks: orderPingTasksByBackend(
-      [...taskMap.values()],
+      metricStats.map(normalizeMetricTask),
       backendTasksResult.status === 'fulfilled' ? backendTasksResult.value : [],
     ),
   }
@@ -345,6 +344,7 @@ async function fetchRecords() {
 
   if (isCustomRange.value && !customRange.value) {
     remoteData.value = []
+    metricLossSamples.value = null
     tasks.value = []
     error.value = customRangeError.value || '请选择有效的自定义时间范围'
     legacyCustomRangeFallback.value = false
@@ -374,10 +374,8 @@ async function fetchRecords() {
     if (sequence !== fetchRecordsSequence || requestedUuid !== props.uuid)
       return
 
-    const records = result.records
-    records.sort((a, b) => dayjs(a.time).valueOf() - dayjs(b.time).valueOf())
-
-    remoteData.value = records
+    remoteData.value = metricPayload ? metricPayload.records : [...result.records].sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
+    metricLossSamples.value = metricPayload?.lossSamples ?? null
     tasks.value = result.tasks
 
     if (tasks.value.length > 0 && selectedTaskIds.value.length === 0) {
@@ -391,6 +389,7 @@ async function fetchRecords() {
     error.value = err instanceof Error ? err.message : '获取数据失败'
     legacyCustomRangeFallback.value = false
     remoteData.value = []
+    metricLossSamples.value = null
     tasks.value = []
   }
   finally {
@@ -401,8 +400,7 @@ async function fetchRecords() {
 
 // ==================== 数据处理 ====================
 
-const mergedData = computed(() => {
-  const data = remoteData.value
+function mergePingSamples(data: readonly PingChartSample[]): PingChartRow[] {
   if (!data.length)
     return []
 
@@ -418,11 +416,13 @@ const mergedData = computed(() => {
     Math.max(800, Math.floor(fallbackIntervalSec * 1000 * 0.25)),
   )
 
-  const grouped: Map<number, Record<string, unknown>> = new Map()
+  const grouped = new Map<number, PingChartRow>()
   const anchors: number[] = []
 
   for (const rec of data) {
-    const ts = dayjs(rec.time).valueOf()
+    const ts = Date.parse(rec.time)
+    if (!Number.isFinite(ts))
+      continue
     let anchor: number | null = null
 
     for (let index = anchors.length - 1; index >= 0; index--) {
@@ -444,34 +444,34 @@ const mergedData = computed(() => {
     }
 
     const group = grouped.get(useTs)!
-    group[rec.task_id] = rec.value < 0 ? null : rec.value
+    const value = rec.value !== null && rec.value >= 0 ? rec.value : null
+    // A padded bucket must not overwrite an observation grouped at the same time.
+    group[rec.task_id] = value ?? group[rec.task_id] ?? null
   }
 
-  const merged = Array.from(grouped.values()).sort(
-    (a, b) => dayjs(a.time as string).valueOf() - dayjs(b.time as string).valueOf(),
-  )
+  const merged = [...grouped.values()]
 
   const range = appliedCustomRange.value
   if (isCustomRange.value && range) {
     const fromTs = range.start.valueOf()
     const toTs = range.end.valueOf()
     return merged.filter((item) => {
-      const timestamp = dayjs(item.time as string).valueOf()
+      const timestamp = Date.parse(item.time)
       return timestamp >= fromTs && timestamp <= toTs
     })
   }
 
   const hours = selectedHours.value
   const lastItem = merged.at(-1)
-  const lastTs = lastItem ? dayjs(lastItem.time as string).valueOf() : dayjs().valueOf()
-  const fromTs = lastTs - hours * 3600_000
+  const lastTs = lastItem ? Date.parse(lastItem.time) : Date.now()
+  const fromTs = lastTs - hours * TIME_MS.hour
 
   let startIdx = 0
   for (let i = 0; i < merged.length; i++) {
     const item = merged[i]
     if (!item)
       continue
-    const ts = dayjs(item.time as string).valueOf()
+    const ts = Date.parse(item.time)
     if (ts >= fromTs) {
       startIdx = Math.max(0, i - 1)
       break
@@ -479,20 +479,26 @@ const mergedData = computed(() => {
   }
 
   return merged.slice(startIdx)
+}
+
+const latencyRows = computed(() => mergePingSamples(remoteData.value))
+const legacyLossHistory = computed(() => {
+  const range = appliedCustomRange.value
+  const lastSample = remoteData.value.at(-1)
+  const end = range?.end.valueOf() ?? (lastSample ? Date.parse(lastSample.time) : Date.now())
+  const start = range?.start.valueOf() ?? end - selectedHours.value * TIME_MS.hour
+  return buildLegacyPingLossHistory(remoteData.value, start, end)
 })
+const lossRows = computed(() => metricLossSamples.value === null
+  ? legacyLossHistory.value.rows
+  : mergePingSamples(metricLossSamples.value))
 
 const chartData = computed(() => {
-  let data = mergedData.value
-  const selectedKeys = selectedTaskIds.value.map(String)
-
-  if (selectedKeys.length === 0)
+  if (!selectedTaskIds.value.length)
     return []
-
-  if (cutPeak.value) {
-    data = smoothPingChartDisplayRows(data, selectedTaskIds.value)
-  }
-
-  return data
+  if (isLossChart.value)
+    return lossRows.value
+  return cutPeak.value ? smoothPingChartDisplayRows(latencyRows.value, selectedTaskIds.value) : latencyRows.value
 })
 
 // ==================== 工具函数 ====================
@@ -533,7 +539,7 @@ const latestValues = computed(() => {
   for (const task of tasks.value) {
     for (let i = remoteData.value.length - 1; i >= 0; i--) {
       const rec = remoteData.value[i]
-      if (rec && rec.task_id === task.id && rec.value >= 0) {
+      if (rec?.task_id === task.id && rec.value !== null && rec.value >= 0) {
         latestMap.set(task.id, rec.value)
         break
       }
@@ -555,6 +561,35 @@ const selectedTasks = computed(() => {
 })
 
 const taskLabels = computed(() => pingChartTaskLabels(tasks.value))
+const plottedTasks = computed(() => selectedTasks.value.map((task, index) => ({
+  id: task.id,
+  seriesName: String(task.id),
+  label: taskLabels.value.get(task.id) ?? task.name,
+  color: getTaskColor(task.id),
+  lineType: appStore.colorVisionFriendly
+    ? (ACCESSIBLE_LINE_TYPES[index % ACCESSIBLE_LINE_TYPES.length] ?? 'solid')
+    : 'solid',
+})))
+const peakLoss = computed(() => {
+  let peak: number | null = null
+  for (const row of lossRows.value) {
+    for (const task of selectedTasks.value) {
+      const value = row[task.id]
+      if (value != null && (peak === null || value > peak))
+        peak = value
+    }
+  }
+  return peak
+})
+const hasChart = computed(() => selectedTasks.value.length > 0 && (!isLossChart.value || peakLoss.value !== null))
+
+function toggleLegendTask(taskId: number) {
+  const hidden = hiddenLegendTaskIds.value
+  if (hidden.has(taskId))
+    hidden.delete(taskId)
+  else
+    hidden.add(taskId)
+}
 
 // 切换任务选中状态
 function toggleTask(taskId: number) {
@@ -606,40 +641,39 @@ const baseTooltipConfig = computed(() => ({
   },
 }))
 
-const pingChartOption = computed(() => {
-  const taskList = selectedTasks.value
+const pingPlotOption = computed(() => {
+  const taskList = plottedTasks.value
   const data = chartData.value
   const hours = selectedHours.value
+  const loss = isLossChart.value
 
   // 按数据自身量级固定 Y 轴，避免自动缩放把小波动也拉满整幅图。
-  const axisScale = resolvePingAxisScale(data, taskList.map(task => task.id))
+  const axisScale = loss ? undefined : resolvePingAxisScale(data, taskList.map(task => task.id))
+  const lossMax = loss ? ([10, 25, 50, 100].find(max => max >= (peakLoss.value ?? 0)) ?? 100) : undefined
 
   // 构建 series，确保颜色与卡片一致
-  const series = taskList.map((task, index) => {
-    const color = getTaskColor(task.id)
-    const lineType = appStore.colorVisionFriendly
-      ? (ACCESSIBLE_LINE_TYPES[index % ACCESSIBLE_LINE_TYPES.length] ?? 'solid')
-      : 'solid'
+  const series = taskList.map(({ id, seriesName, color, lineType }) => {
+    const values = data.map(d => d[id] as number | null ?? null)
     return {
-      name: taskLabels.value.get(task.id),
+      name: seriesName,
       type: 'line' as const,
-      data: data.map(d => d[task.id] as number | null ?? null),
+      data: values,
       // 平滑曲线可能过冲出尖刺，钳制到 x 单调以保证圆润且不越过相邻采样点。
-      smooth: cutPeak.value ? 0.5 : 0.35,
+      smooth: loss ? false : cutPeak.value ? 0.5 : 0.35,
       smoothMonotone: 'x' as const,
-      showSymbol: false,
+      step: loss ? 'middle' as const : false,
+      showSymbol: loss,
+      showAllSymbol: loss,
+      symbol: (_: unknown, { dataIndex }: { dataIndex: number }) =>
+        values[dataIndex - 1] == null && values[dataIndex + 1] == null ? 'circle' : 'none',
+      symbolSize: 5,
       connectNulls: false,
-      lineStyle: { width: 1.5, color, cap: 'round' as const, type: lineType },
+      lineStyle: { width: loss ? 1.75 : 1.5, color, cap: 'round' as const, type: lineType },
       itemStyle: { color }, // 确保 symbol 颜色一致
     }
   })
 
-  // 颜色映射表（用于 Tooltip）
-  const colorMap = new Map<number, string>()
-  tasks.value.forEach((task, idx) => {
-    const safeIdx = Math.max(0, idx % chartColors.length)
-    colorMap.set(task.id, chartColors[safeIdx]!)
-  })
+  const tasksBySeries = new Map(taskList.map(task => [task.seriesName, task]))
 
   return {
     animation: false,
@@ -666,31 +700,21 @@ const pingChartOption = computed(() => {
         let html = `<div style="font-weight:600;margin-bottom:6px;color:${chartThemeColors.value.textSecondary}">${timeStr}</div>`
         html += '<div style="display:flex;flex-direction:column;gap:4px">'
 
-        // 按延迟值排序显示
+        // 按探测值排序显示
         const sortedParams = [...p].sort((a, b) => (a.value ?? 0) - (b.value ?? 0))
 
         for (const item of sortedParams) {
-          if (item.value !== null && item.value !== undefined) {
-            // 通过任务名找到对应的任务ID，再获取颜色
-            const task = tasks.value.find(t => taskLabels.value.get(t.id) === item.seriesName)
-            const color = task ? colorMap.get(task.id) || chartColors[0] : chartColors[0]
-            const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:8px;flex-shrink:0"></span>`
-            html += `<div style="display:flex;align-items:center">${colorDot}<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapePingTooltip(item.seriesName)}</span><span style="margin-left:auto;font-weight:600;margin-left:16px;font-variant-numeric:tabular-nums">${Math.round(item.value)} ms</span></div>`
-          }
+          const task = tasksBySeries.get(item.seriesName)
+          if (!task || typeof item.value !== 'number' || !Number.isFinite(item.value))
+            continue
+
+          const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${task.color};margin-right:8px;flex-shrink:0"></span>`
+          const displayValue = loss ? `${Number(item.value.toFixed(2))}%` : `${Math.round(item.value)} ms`
+          html += `<div style="display:flex;align-items:center">${colorDot}<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapePingTooltip(task.label)}</span><span style="margin-left:auto;font-weight:600;margin-left:16px;font-variant-numeric:tabular-nums">${displayValue}</span></div>`
         }
         html += '</div>'
         return html
       },
-    },
-    legend: {
-      type: 'scroll',
-      bottom: 0,
-      itemWidth: 12,
-      itemHeight: 12,
-      itemGap: 16,
-      icon: 'roundRect',
-      textStyle: { fontSize: 11, color: chartThemeColors.value.textSecondary },
-      data: taskList.map(t => taskLabels.value.get(t.id)),
     },
     grid: chartMargin,
     xAxis: {
@@ -711,11 +735,12 @@ const pingChartOption = computed(() => {
     },
     yAxis: {
       type: 'value',
-      name: '延迟 (ms)',
-      min: axisScale?.min,
-      max: axisScale?.max,
+      name: loss ? '丢包率' : '延迟 (ms)',
+      min: loss ? 0 : axisScale?.min,
+      max: loss ? lossMax : axisScale?.max,
+      interval: lossMax === undefined ? undefined : lossMax / 5,
       nameTextStyle: { color: chartThemeColors.value.textSecondary },
-      axisLabel: { fontSize: 11, color: chartThemeColors.value.textSecondary, formatter: '{value}' },
+      axisLabel: { fontSize: 11, color: chartThemeColors.value.textSecondary, formatter: loss ? '{value}%' : '{value}' },
       axisLine: { show: false },
       axisTick: { show: false },
       splitLine: {
@@ -729,7 +754,18 @@ const pingChartOption = computed(() => {
   }
 })
 
+const pingChartOption = computed(() => ({
+  ...pingPlotOption.value,
+  legend: {
+    show: false,
+    data: plottedTasks.value.map(task => task.seriesName),
+    selected: Object.fromEntries(plottedTasks.value.map(task => [task.seriesName, !hiddenLegendTaskIds.value.has(task.id)])),
+  },
+}))
+
 // ==================== 生命周期 ====================
+
+watch(chartMetric, () => touchTooltip.reset())
 
 watch(selectedView, () => {
   touchTooltip.reset()
@@ -741,8 +777,10 @@ watch(selectedView, () => {
 
 watch(() => props.uuid, () => {
   remoteData.value = []
+  metricLossSamples.value = null
   tasks.value = []
   selectedTaskIds.value = []
+  hiddenLegendTaskIds.value.clear()
   activeTaskTooltipId.value = null
   smoothInfoTooltipOpen.value = false
   fetchRecords()
@@ -804,13 +842,13 @@ onBeforeUnmount(() => {
           <Input
             v-model="customStartInput"
             type="datetime-local"
-            aria-label="延迟图开始时间"
+            aria-label="Ping 图开始时间"
             class="h-8 bg-background/50 text-xs"
           />
           <Input
             v-model="customEndInput"
             type="datetime-local"
-            aria-label="延迟图结束时间"
+            aria-label="Ping 图结束时间"
             class="h-8 bg-background/50 text-xs"
           />
           <Button
@@ -839,7 +877,7 @@ onBeforeUnmount(() => {
         {{ error }}
       </div>
       <div v-else-if="tasks.length === 0 && !loading" class="py-8">
-        <Empty description="暂无延迟数据" />
+        <Empty description="暂无探测数据" />
       </div>
 
       <template v-else>
@@ -948,42 +986,86 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- 平滑峰值开关 -->
-        <div class="flex flex-wrap gap-4 items-center py-2 justify-between">
-          <TooltipProvider>
-            <div class="flex gap-2 items-center">
+        <section aria-label="Ping 趋势" class="glass-control-surface min-w-0 rounded-lg">
+          <div class="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2.5 sm:px-4">
+            <h3 class="flex items-center gap-2 text-sm font-semibold">
+              <Icon icon="tabler:chart-line" class="size-4 text-muted-foreground" aria-hidden="true" />
+              Ping 趋势
+            </h3>
+            <div role="group" aria-label="趋势指标" class="glass-control-surface inline-flex shrink-0 rounded-md p-0.5">
               <Button
-                variant="ghost" size="xs" class="h-7 rounded-sm bg-background/50 hover:bg-background border-none"
-                :class="cutPeak && 'shadow-[0_0_0_2px] shadow-green-600/10 text-green-600'" @click="cutPeak = !cutPeak"
+                v-for="metric in chartMetrics" :key="metric.value" type="button" variant="ghost" size="xs"
+                class="glass-control-button h-8 gap-1.5 rounded-sm px-2.5 text-xs sm:h-7"
+                :aria-pressed="chartMetric === metric.value" @click="chartMetric = metric.value"
               >
-                平滑峰值
+                <Icon :icon="metric.icon" class="size-3.5" aria-hidden="true" />
+                {{ metric.label }}
               </Button>
-              <Tooltip
-                :open="isTouchTooltipMode ? smoothInfoTooltipOpen : undefined"
-                @update:open="(open) => { if (!isTouchTooltipMode) smoothInfoTooltipOpen = open }"
-              >
-                <TooltipTrigger as-child>
-                  <Button
-                    data-ping-tooltip-trigger variant="ghost" size="icon-xs" class="text-muted-foreground"
-                    @pointerdown="touchTooltip.pointerDown" @pointermove="touchTooltip.pointerMove" @pointercancel="touchTooltip.cancel"
-                    @pointerup="touchTooltip.pointerUp($event, toggleSmoothInfoTooltip)"
-                    @click="touchTooltip.click($event, toggleSmoothInfoTooltip)"
-                  >
-                    <Icon icon="carbon:information" :width="14" :height="14" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <span>使用 EWMA 算法平滑显示，保留缺失时段；统计和历史原值不变</span>
-                </TooltipContent>
-              </Tooltip>
             </div>
-          </TooltipProvider>
-        </div>
-
-        <!-- 图表 -->
-        <div class="h-80 bg-background/50 p-4 rounded-md">
-          <VChart :option="pingChartOption" autoresize />
-        </div>
+          </div>
+          <div
+            :data-ping-history-chart="chartMetric"
+            class="relative h-80 px-1.5 pb-3 pt-4 sm:px-4"
+          >
+            <div v-if="!hasChart" class="flex h-full items-center justify-center">
+              <Empty :description="!selectedTasks.length ? '请选择要显示的探测任务' : '所选时段暂无丢包率数据'" />
+            </div>
+            <VChart v-else :option="pingChartOption" autoresize />
+            <TooltipProvider>
+              <div v-if="!isLossChart && selectedTasks.length" class="absolute right-4 top-2 flex items-center gap-1">
+                <Button
+                  type="button" variant="ghost" size="xs" class="glass-control-button h-7 rounded-sm"
+                  :aria-pressed="cutPeak" @click="cutPeak = !cutPeak"
+                >
+                  平滑峰值
+                </Button>
+                <Tooltip
+                  :open="isTouchTooltipMode ? smoothInfoTooltipOpen : undefined"
+                  @update:open="(open) => { if (!isTouchTooltipMode) smoothInfoTooltipOpen = open }"
+                >
+                  <TooltipTrigger as-child>
+                    <Button
+                      data-ping-tooltip-trigger variant="ghost" size="icon-xs" class="text-muted-foreground" aria-label="平滑峰值说明"
+                      @pointerdown="touchTooltip.pointerDown" @pointermove="touchTooltip.pointerMove" @pointercancel="touchTooltip.cancel"
+                      @pointerup="touchTooltip.pointerUp($event, toggleSmoothInfoTooltip)"
+                      @click="touchTooltip.click($event, toggleSmoothInfoTooltip)"
+                    >
+                      <Icon icon="carbon:information" :width="14" :height="14" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <span>使用 EWMA 算法平滑显示，保留缺失时段；统计和历史原值不变</span>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
+            <p
+              v-if="isLossChart && peakLoss !== null && metricLossSamples === null"
+              class="pointer-events-none absolute right-4 top-3 text-[11px] text-muted-foreground"
+            >
+              每 {{ legacyLossHistory.bucketMinutes }} 分钟统计
+            </p>
+          </div>
+          <div
+            v-if="hasChart" role="group" aria-label="探测线路图例"
+            class="flex flex-wrap justify-center gap-x-1.5 gap-y-1.5 border-t border-border/50 px-3 py-2.5 sm:gap-x-2 sm:px-4"
+          >
+            <Button
+              v-for="task in plottedTasks" :key="task.id" type="button" variant="ghost" size="xs"
+              class="h-auto min-h-7 max-w-full min-w-0 gap-2 px-2 py-1 text-left text-xs/4 font-normal whitespace-normal text-foreground/85 aria-pressed:border-border/50 aria-pressed:bg-muted/35 aria-[pressed=false]:border-dashed aria-[pressed=false]:border-border/40 aria-[pressed=false]:text-muted-foreground"
+              :aria-pressed="!hiddenLegendTaskIds.has(task.id)" @click="toggleLegendTask(task.id)"
+            >
+              <span
+                aria-hidden="true" class="w-4 shrink-0 border-t-2"
+                :class="{ 'opacity-45': hiddenLegendTaskIds.has(task.id) }"
+                :style="{ borderTopColor: task.color, borderTopStyle: task.lineType }"
+              />
+              <span class="min-w-0 [overflow-wrap:anywhere]">
+                {{ task.label }}
+              </span>
+            </Button>
+          </div>
+        </section>
       </template>
     </Spinner>
   </div>

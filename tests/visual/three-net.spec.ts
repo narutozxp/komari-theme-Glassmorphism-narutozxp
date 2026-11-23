@@ -72,10 +72,17 @@ test('history refresh pauses in background and resumes once per node', async ({ 
 test('same-name tasks keep independent legends and tooltip text stays escaped', async ({ page }) => {
   await installKomariFixture(page, { hideEarth: true, pingTaskOrdering: true, duplicateTaskNames: true })
   await page.goto(`/instance/${UUID}`)
-  await expect.poll(() => page.locator('[data-ping-task-id]').count()).toBe(3)
+  const legendButtons = page.getByRole('group', { name: '探测线路图例' }).getByRole('button').filter({ hasText: '同名' })
+  await expect(legendButtons).toHaveCount(2)
+  expect(new Set(await legendButtons.allTextContents()).size).toBe(2)
+  await legendButtons.first().click()
+  await expect(legendButtons.first()).toHaveAttribute('aria-pressed', 'false')
+  await expect(legendButtons.last()).toHaveAttribute('aria-pressed', 'true')
   const result = await page.evaluate(() => {
     interface Chart {
+      getDom: () => HTMLElement
       getOption: () => { series: Array<{ name: string }>, legend: Array<{ selected: Record<string, boolean> }> }
+      getModel: () => { getCurrentSeriesIndices: () => number[] }
       dispatchAction: (action: Record<string, unknown>) => void
     }
     interface VNode {
@@ -88,14 +95,11 @@ test('same-name tasks keep independent legends and tooltip text stays escaped', 
       const node = pending.pop()!
       const exposed = node.component?.exposed?.chart
       const chart = exposed && 'getOption' in exposed ? exposed : exposed?.value
-      if (chart) {
+      if (chart?.getDom().closest('[data-ping-history-chart]')) {
         const option = chart.getOption()
-        if (option.series.some(series => series.name.includes('<img'))) {
-          const names = option.series.map(series => series.name)
-          chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: 5 })
-          chart.dispatchAction({ type: 'legendToggleSelect', name: names[0] })
-          return { names, selected: chart.getOption().legend[0].selected }
-        }
+        const names = option.series.map(series => series.name)
+        chart.dispatchAction({ type: 'showTip', seriesIndex: 1, dataIndex: 5 })
+        return { names, selected: option.legend[0].selected, visibleSeries: chart.getModel().getCurrentSeriesIndices() }
       }
       if (node.component?.subTree)
         pending.push(node.component.subTree)
@@ -108,6 +112,7 @@ test('same-name tasks keep independent legends and tooltip text stays escaped', 
   expect(new Set(result!.names).size).toBe(3)
   expect(result!.selected[result!.names[0]]).toBe(false)
   expect(result!.selected[result!.names[1]]).not.toBe(false)
+  expect(result!.visibleSeries).toEqual([1, 2])
   await expect(page.locator('img[src="x"]')).toHaveCount(0)
   expect(await page.evaluate(() => '__pingInjected' in window)).toBe(false)
 })

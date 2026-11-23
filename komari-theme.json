@@ -2,7 +2,7 @@
   "name": "Komari Glassmorphism 定制版",
   "short": "Glassmorphism-Starlight",
   "description": "节点地图与按服务器配置 Ping 的 Komari 监控主题",
-  "version": "3.4.9",
+  "version": "3.4.10",
   "author": "sanrokamlan",
   "preview": "preview.png",
   "configuration": {

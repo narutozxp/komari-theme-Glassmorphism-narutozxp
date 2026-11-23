@@ -229,7 +229,7 @@ function metricValue(key: string, index: number): number {
     'gpu.memory.total': 0,
     'gpu.temperature': 0,
     'ping.latency_ms': 88 + Math.sin(index / 3) * 15,
-    'ping.loss': index % 13 === 0 ? 8 : 1.5,
+    'ping.loss': index % 13 === 0 ? 0.08 : 0.015,
   }
   return values[key] ?? 0
 }
@@ -294,9 +294,11 @@ function buildMetricResponse(
           }
           return {
             time: point.time,
-            value: options.pingGaps && key === 'ping.latency_ms' && point.index >= 18 && point.index <= 30
+            value: options.pingGaps && key.startsWith('ping.') && point.index >= 18 && point.index <= 30
               ? null
-              : key === 'ping.loss' && options.threeNetPing ? 0.015 : metricValue(key, point.index) + (task?.id ?? 0),
+              : key === 'ping.loss'
+                ? (options.threeNetPing ? 0.015 : metricValue(key, point.index))
+                : metricValue(key, point.index) + (task?.id ?? 0),
           }
         }),
       }))

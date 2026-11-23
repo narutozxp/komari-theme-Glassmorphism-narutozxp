@@ -5,7 +5,7 @@ export function escapePingTooltip(value: string): string {
   return value.replace(htmlSpecialCharacters, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[character]!)
 }
 
-/** ECharts links legend entries by name; duplicate backend names need unique labels. */
+/** Give tasks with duplicate backend names distinguishable display labels. */
 export function pingChartTaskLabels(tasks: ReadonlyArray<{ id: number, name: string }>): Map<number, string> {
   const counts = new Map<string, number>()
   for (const task of tasks) counts.set(task.name, (counts.get(task.name) ?? 0) + 1)

@@ -473,7 +473,7 @@ const metricCards = computed<MetricCard[]>(() => appStore.detailMetricCardOrder.
 </script>
 
 <template>
-  <div class="instance-detail space-y-4">
+  <div class="instance-detail space-y-4 pb-8">
     <div v-if="!data" class="p-4">
       <CardX>
         <Empty description="节点不存在或已被删除">
